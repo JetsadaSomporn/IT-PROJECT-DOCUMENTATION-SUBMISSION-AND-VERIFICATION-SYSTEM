@@ -896,7 +896,7 @@ const showTrackInfo = () => {
     };
 
     fetchSubjects();
-  }, []); // Run once when component mounts
+  }, []); 
 
   useEffect(() => {
     const fetchSubjectsData = async () => {
