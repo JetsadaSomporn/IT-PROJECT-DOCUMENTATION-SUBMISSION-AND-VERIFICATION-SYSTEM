@@ -1,0 +1,1880 @@
+"use client";
+
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import * as XLSX from 'xlsx';
+import Modal from 'react-modal';
+import TabTransition from '@/components/TabTransition';
+import ReactDatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBook, faUserGraduate, faUser } from '@fortawesome/free-solid-svg-icons';
+import { useAuth } from '../../../../hooks/useAuth';
+import { signOut } from 'next-auth/react';
+
+interface Student {
+  student_id: string;
+  username: string;
+  email: string;
+  userlastname: string;
+}
+
+interface Teacher {
+  userid: string;
+  username: string;
+  userlastname: string;
+  type: string[];
+  email?: string; 
+  assigned_at?: string;
+}
+
+interface Subject {
+  subjectid: string;
+  teachers: Teacher[];
+  students: Student[];
+  number_of_students: number;
+  section: number;
+  subject_semester: number;
+  subject_year: string;
+  group_data: {
+    [key: string]: any;
+  
+  };
+  created: string;
+  updated: string;
+  deleted: string | null;
+  subject_name: string;
+}
+
+interface ImportedStudent {
+  student_id: string;
+  username: string;
+  userlastname: string; 
+  email: string;
+}
+
+interface User {
+  userid: string;
+  username: string;
+  userlastname: string;
+  email: string;
+  type: string[];
+}
+
+interface Assignment {
+  assignmentid: number;
+  subject_available_id: number;
+  validates: ValidateItem[];
+  assignment_name: string;
+  assignment_description: string;
+  assignment_date: string;
+  assignment_due_date: string;
+  created: string;
+  updated: string;
+  deleted: string | null;
+  doc_verification?: { 
+    [key: string]: {
+      checked: boolean;
+      details: {
+        [key: string]: boolean;
+      };
+    };
+  };
+}
+
+
+
+interface DocumentStatus {
+  pdf_path?: string;
+  name?: string;
+  status: boolean;
+  details: {
+    [key: string]: boolean;
+  };
+}
+
+interface ValidateItem {
+  student_id: string;
+  status: "pending" | "submitted" | "approved" | "rejected";
+  submitted_at: string;
+  group_id?: number;
+  document_status: {
+    [key: string]: DocumentStatus;
+  };
+  requirements: {
+    [key: string]: {
+      checked: boolean;
+      details: {
+        [key: string]: boolean;
+      };
+    };
+  };
+  type?: string;
+}
+
+type ValidationData = ValidateItem;
+
+const Header = ({ openSidebar }: { openSidebar: () => void }) => {
+  const { user } = useAuth();
+  const [showLogout, setShowLogout] = useState(false); // Added state for menu visibility
+  
+  const handleLogout = () => {
+    signOut(); 
+  };
+
+  return (
+    <header className="bg-white shadow-md fixed w-full z-10 border-b border-blue-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center">
+            <button 
+              onClick={openSidebar}
+              className="p-2 rounded-full hover:bg-blue-50 transition-colors duration-200"
+            >
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
+          </div>
+          <div className="relative flex items-center space-x-4">
+            <div className="text-sm text-gray-600">{user?.name || 'ผู้ใช้'}</div>
+            <button
+              onClick={() => setShowLogout(prev => !prev)}
+              className="w-8 h-8 rounded-full bg-blue-600 text-white"
+            >
+              {user?.name?.[0] || 'ผ'}
+            </button>
+            {showLogout && (
+              <div className="absolute right-0 mt-10 w-32 bg-white shadow-md border rounded">
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+
+
+interface SidebarProps {
+  isSidebarOpen: boolean;
+  closeSidebar: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
+  <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                  bg-white w-64 border-r border-blue-100 transition-transform duration-300 ease-in-out z-30`}>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-blue-600">Menu</h2>
+        <button onClick={closeSidebar} className="text-gray-500 hover:text-gray-700">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <nav className="space-y-4">
+        <Link href="/dashboard/admin/subjectManagement" 
+          className="flex items-center px-4 py-3 text-blue-600 bg-blue-50 rounded-xl">
+          <FontAwesomeIcon icon={faBook} className="w-5 h-5 mr-3" />
+          รายวิชา
+        </Link>
+        <Link href="/dashboard/admin/userManagement" 
+          className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
+          <FontAwesomeIcon icon={faUserGraduate} className="w-5 h-5 mr-3" />
+          ผู้ใช้งาน
+        </Link>
+        <Link href="/dashboard/admin/groupManagement" 
+          className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
+          <FontAwesomeIcon icon={faUser} className="w-5 h-5 mr-3" />
+          กลุ่มเรียน
+        </Link>
+      </nav>
+    </div>
+  </div>
+);
+
+const EditSubjectModal = ({ 
+  isOpen, 
+  onClose, 
+  subject, 
+  onSave 
+}: { 
+  isOpen: boolean;
+  onClose: () => void;
+  subject: Subject | null;
+  onSave: (updatedSubject: any) => Promise<void>;
+}) => {
+  const [editForm, setEditForm] = useState({
+    subject_name: subject?.subject_name || '',
+    subject_semester: subject?.subject_semester || 0,
+    subject_year: subject?.subject_year || '',
+    section: subject?.section || 0
+  });
+
+  useEffect(() => {
+    if (subject) {
+      setEditForm({
+        subject_name: subject.subject_name,
+        subject_semester: subject.subject_semester,
+        subject_year: subject.subject_year,
+        section: subject.section
+      });
+    }
+  }, [subject]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: name === 'subject_semester' || name === 'section' ? parseInt(value) || 0 : value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave(editForm);
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onClose}
+      className="fixed inset-0 flex items-center justify-center p-4 z-50"
+      overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
+        <div className="bg-blue-600 p-6">
+          <h2 className="text-xl font-semibold text-white">แก้ไขข้อมูลวิชา</h2>
+          <p className="text-blue-100 mt-1">อัปเดตรายละเอียดวิชาด้านล่าง</p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block mb-2 font-medium">ชื่อวิชา</label>
+              <input
+                type="text"
+                name="subject_name"
+                value={editForm.subject_name}
+                onChange={handleChange}
+                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block mb-2 font-medium">ภาคการศึกษา</label>
+              <input
+                type="number"
+                name="subject_semester"
+                value={editForm.subject_semester}
+                onChange={handleChange}
+                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block mb-2 font-medium">ปีการศึกษา</label>
+              <input
+                type="text"
+                name="subject_year"
+                value={editForm.subject_year}
+                onChange={handleChange}
+                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block mb-2 font-medium">หมู่เรียน</label>
+              <input
+                type="number"
+                name="section"
+                value={editForm.section}
+                onChange={handleChange}
+                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              บันทึกการแก้ไข
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition-colors"
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+};
+
+const get = (url: string, opts?: any) => fetch(url, opts);
+
+const SubjectDetailManagement: React.FC = () => {
+  const params = useParams();
+  const router = useRouter();
+  const { subjectid } = params;
+  const [subject, setSubject] = useState<Subject | null>(() => ({
+    subjectid: '',
+    teachers: [],
+    students: [],
+    number_of_students: 0,
+    section: 0,
+    subject_semester: 0,
+    subject_year: '',
+    group_data: {},
+    created: '',
+    updated: '',
+    deleted: null,
+    subject_name: ''
+  }));
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'students' | 'teachers' | 'tasks' | 'dashboard'>('students');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSubject, setEditedSubject] = useState<Subject | null>(null);
+  const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
+  const [availableTeachers, setAvailableTeachers] = useState<Teacher[]>([]);
+  const [importedStudents, setImportedStudents] = useState<ImportedStudent[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isTeacherSelectionOpen, setIsTeacherSelectionOpen] = useState(false);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [newAssignment, setNewAssignment] = useState({
+    assignment_name: '',
+    assignment_description: '',
+    assignment_date: new Date().toISOString().split('T')[0],
+    assignment_due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0],
+  });
+  const [documentVerification, setDocumentVerification] = useState<{
+    [key: string]: {
+      checked: boolean;
+      details: {
+        [key: string]: boolean;
+      };
+    };
+  }>({
+    'เอกสารยืนยันหัวข้อโครงงาน': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'สรุปการเข้าพบอาจารย์ที่ปรึกษา': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'หลักฐานการเข้าร่วมการแข่งขัน': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'รายงานความก้าวหน้า': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'คู่มือ': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+  });
+
+  const handleDocumentChange = (documentName: string) => {
+    setDocumentVerification(prev => ({
+      ...prev,
+      [documentName]: {
+        ...prev[documentName],
+        checked: !prev[documentName].checked,
+        details: prev[documentName].checked ? Object.fromEntries(
+          Object.keys(prev[documentName].details).map(key => [key, false])
+        ) : prev[documentName].details,
+      }
+    }));
+  };
+
+
+  useEffect(() => {
+  }, []);
+
+  const fetchSubject = async () => {
+    console.log('load subj');
+    try {
+      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch subject data');
+      }
+      const data = await response.json();
+      console.log('subj data', data);
+
+      const mappedStudents = data.students.map((s: any) => ({
+        student_id: s.userid || s.student_id,
+        username: s.username,
+        userlastname: s.userlastname,
+        email: s.email,
+      }));
+
+      setSubject({
+        ...data,
+        students: mappedStudents,
+      });
+      setLoading(false);
+    } catch (err: any) {
+      console.log('fail get subj', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (subjectid) {
+      fetchSubject();
+    }
+  }, [subjectid]);
+
+  const normalizeText = (text: string): string => {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9ก-๙]/g, ''); 
+  };
+  
+  const findHeaderRowIndex = (jsonData: any[][]): number => {
+    // console.log('find header row');
+    const requiredHeaders = ['รหัสประจำตัว', 'ชื่อ', 'kkumail'].map(normalizeText);
+  
+    for (let i = 0; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      console.log('row i', row);
+  
+      const normalizedRow = row.map((cell: any) => (typeof cell === 'string' ? normalizeText(cell) : '')).filter(Boolean);
+  
+      const hasAllHeaders = requiredHeaders.every(header =>
+        normalizedRow.includes(header)
+      );
+  
+  
+      if (hasAllHeaders) {
+        console.log('found header row', i);
+        return i;
+      }
+    }
+    console.log('no header row');
+    return -1;
+  };
+  
+  const [showPreview, setShowPreview] = useState(false);
+
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'students' | 'teachers' | 'users'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        if (!event.target?.result) throw new Error('File reading failed');
+
+        const data = event.target.result as string;
+
+        const workbook = XLSX.read(data, { type: 'string', raw: true });
+
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+
+        if (jsonData.length === 0) {
+          alert('the Excel file is empty.');
+          return;
+        }
+
+        const headerRowIndex = findHeaderRowIndex(jsonData);
+        if (headerRowIndex === -1) {
+          alert('header row not found in the Excel file.');
+          return;
+        }
+
+        const headerRow = jsonData[headerRowIndex];
+        console.log('headerRow:', headerRow);
+
+        const headerMap: { [key: string]: number } = {};
+        headerRow.forEach((header: any, index: number) => {
+          const headerString = header ? String(header).trim() : '';
+          headerMap[headerString] = index;
+        });
+
+        if (headerMap['kkumail']) {
+          headerMap['email'] = headerMap['kkumail'];
+        }
+
+        const dataRows = jsonData.slice(headerRowIndex + 2);
+
+        const students: ImportedStudent[] = [];
+        for (const row of dataRows) {
+          const studentIdCell = row[headerMap['รหัสประจำตัว']]; 
+          const nameCell = row[headerMap['ชื่อ']];                
+          const emailCell = row[headerMap['email']];
+
+          // if (!studentIdCell) {
+          //   continue;
+          // }
+
+          const studentId = String(studentIdCell).replace(/-/g, '').trim();
+          const fullName = nameCell ? String(nameCell).trim() : '';
+          const email = emailCell ? String(emailCell).trim() : '';
+
+          const nameParts = fullName.split(' ');
+          const username = nameParts[0] || '';
+          const userlastname = nameParts.slice(1).join(' ') || '';
+
+          const student: ImportedStudent = {
+            student_id: studentId,
+            username: username,
+            userlastname: userlastname,
+            email: email,
+           
+          };
+
+          if (student.student_id !== 'รหัสประจำตัว') {
+            students.push(student);
+          }
+        }
+
+        if (students.length > 0) {
+          setImportedStudents(students);
+          setShowPreview(true);
+          console.log('Parsed Students:', students);
+        } else {
+          alert('ไม่พบข้อมูล');
+        }
+      } catch (error: any) {
+        console.error('Error parsing Excel file:', error);
+        alert('err encode');
+      }
+    };
+  
+    reader.onerror = () => {
+      alert('err encode');
+    };
+  
+ 
+    reader.readAsText(file, 'windows-874');
+  };
+  
+  const findDuplicates = (importedStudents: ImportedStudent[], existingStudents: Student[]) => {
+    const duplicates: ImportedStudent[] = [];
+    const newStudents: ImportedStudent[] = [];
+
+    importedStudents.forEach(importedStudent => {
+      const isDuplicate = existingStudents.some(
+        existingStudent => existingStudent.student_id === importedStudent.student_id
+      );
+
+      if (isDuplicate) {
+        duplicates.push(importedStudent);
+      } else {
+        newStudents.push(importedStudent);
+      }
+    });
+
+    return { duplicates, newStudents };
+  };
+
+  const handleSaveImportedStudents = async () => {
+    if (importedStudents.length === 0) {
+      alert('No stu to import');
+      return;
+    }
+    try {
+      const { duplicates, newStudents } = findDuplicates(importedStudents, subject?.students || []);
+      
+      if (newStudents.length === 0) {
+        alert('already import');
+        return;
+      }
+
+      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=students`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ students: newStudents }),
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to save imported students');
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        }
+      }
+
+      const savedMessage = await response.json();
+      alert(savedMessage.message || 'บันทึกนักศึกษาเรียบร้อย');
+      
+      setImportedStudents([]);
+      fetchSubject();
+    } catch (err: any) {
+      // console.error('Error saving imported students:', err);
+      alert(`Error saving students: ${err.message}`);
+    }
+  };
+
+  const handleRemoveStudent = async (student_id: string) => {
+    if (!student_id) {
+      alert('dont have student id to remove.');
+      return;
+    }
+  
+    try {
+      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=remove-student`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ student_id }),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to remove student');
+      }
+  
+      setSubject(prevSubject => prevSubject ? {
+        ...prevSubject,
+        students: prevSubject.students.filter(student => student.student_id !== student_id)
+      } : null);
+      
+      alert('ลบนักศึกษาเรียบร้อยแล้ว');
+    } catch (err: any) {
+      // console.error('Error removing student:', err);
+      alert(`Error removing student: ${err.message}`);
+    }
+  };
+  
+
+  const handleEditToggle = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const handleSaveSubject = async (updatedSubject: any) => {
+    try {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=edit-subject`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSubject),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update subject');
+      }
+
+      const { data } = await response.json();
+      setSubject(data);
+      setIsEditing(false);
+      alert('อัปเดตรายวิชาเรียบร้อยแล้ว');
+    } catch (err: any) {
+      // console.error('Error updating subject:', err);
+      alert('Failed to update subject: ' + err.message);
+    }
+  };
+
+  const [teacherSearchQuery, setTeacherSearchQuery] = useState<string>('');
+
+  const openTeacherModal = async () => {
+    try {
+      await fetchAllUsers();
+      setSelectedTeachers(subject?.teachers.map(t => t.userid) || []);
+      setIsTeacherSelectionOpen(true);
+      setTeacherSearchQuery('');
+    } catch (error: any) {
+      // console.error('error opening teacher modal:', error);
+      alert('ไม่สามารถโหลดข้อมูลครูผู้สอนได้');
+    }
+  };
+
+
+
+  const handleTeacherSave = async () => {
+    try {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=manage-teacher`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ teachers: selectedTeachers }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update teachers');
+      }
+
+      await fetchSubject();
+      setIsTeacherSelectionOpen(false);
+      alert('Teachers updated successfully');
+    } catch (error: any) {
+      // console.error('Error saving teachers:', error);
+      alert(`Failed to update teachers: ${error.message}`);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const res = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=all-users`);
+      const data = await res.json();
+      // Ensure that data is an array before setting state
+      setAllUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching all users:", error);
+      setAllUsers([]);
+    }
+  };
+
+  const handleTeacherCheckbox = (userid: string) => {
+    setSelectedTeachers(prev => {
+      if (prev.includes(userid)) {
+        return prev.filter(id => id !== userid);
+      } else {
+        return [...prev, userid];
+      }
+    });
+  };
+
+ 
+
+  useEffect(() => {
+    if (activeTab === 'tasks') {
+      fetchAssignments();
+    }
+  }, [activeTab]);
+
+  const fetchAssignments = async () => {
+    try {
+      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=all-assignments`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch assignments');
+      }
+  
+      const data = await response.json();
+      console.log('Fetched assignments:', data);
+  
+      // Ensure data is always an array
+      if (!Array.isArray(data)) {
+        console.error('Expected array of assignments, received:', typeof data, data);
+        setAssignments([]);
+        return;
+      }
+  
+      setAssignments(data);
+    } catch (err: any) {
+      console.error('Error fetching assignments:', err);
+      setAssignments([]); // Set empty array on error
+      alert('Failed to fetch assignments');
+    }
+  };
+
+  const handleAssignmentChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setNewAssignment({
+      ...newAssignment,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const openFullScreenTaskForm = () => {
+    setIsCreatingTask(true);
+  };
+
+  const closeFullScreenTaskForm = () => {
+    setIsCreatingTask(false);
+    setNewAssignment({
+      assignment_name: '',
+      assignment_description: '',
+      assignment_date: new Date().toISOString().split('T')[0],
+      assignment_due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0],
+    });
+  };
+
+  const handleCreateAssignment = async () => {
+    try {
+      const payload = {
+        assignment_name: newAssignment.assignment_name,
+        assignment_description: newAssignment.assignment_description,
+        assignment_date: newAssignment.assignment_date,
+        assignment_due_date: newAssignment.assignment_due_date,
+        documentVerification
+      };
+      const response = await get(
+        `/api/admin/subjectDetailManagement/${subjectid}?action=create-assignment`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to create assignment');
+      }
+
+      const createdAssignment: Assignment = await response.json();
+      // console.log('Created assignment:', createdAssignment);
+      setAssignments([...assignments, createdAssignment]);
+      closeFullScreenTaskForm();
+      alert('สร้างงานสำเร็จแล้ว');
+    } catch (err: any) {
+      // console.error('Error creating assignment:', err);
+      alert('Failed to create assignment');
+    }
+  };
+
+  const handleDeleteSubject = async () => {
+    try {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=delete-subject`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete subject');
+      }
+  
+      const result = await response.json();
+      // console.log('Delete result:', result);
+      router.push('/dashboard/admin/subjectManagement');
+    } catch (err: any) {
+      // console.error('Error deleting subject:', err);
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignmentid: number) => {
+    try {
+      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=delete-assignment`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ assignmentid }),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to delete assignment');
+      }
+  
+      setAssignments(assignments.filter(assignment => assignment.assignmentid !== assignmentid));
+    } catch (err: any) {
+      // console.error('error deleting assignment:', err);
+    }
+  };
+
+  const [isAssignmentDetailOpen, setIsAssignmentDetailOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+
+const AssignmentDetailModal = ({ 
+  isOpen, 
+  onClose, 
+  assignment,
+  onSave 
+}: { 
+  isOpen: boolean;
+  onClose: () => void;
+  assignment: Assignment | null;
+  onSave: (updatedAssignment: any) => Promise<void>;
+}) => {
+  const [activeTab, setActiveTab] = useState<'details' | 'dashboard'>('details');
+  const [editForm, setEditForm] = useState({
+    assignment_name: '',
+    assignment_description: '',
+    assignment_date: '',
+    assignment_due_date: '',
+    validates: [] as ValidateItem[],
+    doc_verification: {} as Assignment['doc_verification']
+  });
+
+  const [editDocVerification, setEditDocVerification] = useState<{
+    [key: string]: {
+      checked: boolean;
+      details: {
+        [key: string]: boolean;
+      };
+    };
+  }>({
+    'เอกสารยืนยันหัวข้อโครงงาน': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'สรุปการเข้าพบอาจารย์ที่ปรึกษา': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'หลักฐานการเข้าร่วมการแข่งขัน': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'รายงานความก้าวหน้า': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+    'คู่มือ': { checked: false, details: {
+      'ชื่อไฟล์ถูกต้อง': false,
+      'ชื่อโครงงาน': false,
+      'รายชื่อนักศึกษา': false,
+      'หมายเลขกลุ่ม': false,
+      'ชื่ออาจารย์ที่ปรึกษา': false,
+      'ลายเซ็นอาจารย์': false,
+    }},
+  });
+
+  const [selectedValidation, setSelectedValidation] = useState<ValidationData | null>(null);
+
+  useEffect(() => {
+    if (assignment) {
+      
+      setEditForm({
+        ...assignment,
+        assignment_date: assignment.assignment_date.split('T')[0],
+        assignment_due_date: assignment.assignment_due_date.split('T')[0],
+        validates: assignment.validates || [],
+        doc_verification: assignment.validates?.[0]?.requirements || {}
+      });
+      
+      // set document verification from validates 
+      if (assignment.validates?.[0]?.requirements) {
+        setEditDocVerification(assignment.validates[0].requirements);
+      }
+    }
+  }, [assignment]);
+
+  const handleDocChange = (documentName: string) => {
+    setEditDocVerification(prev => ({
+      ...prev,
+      [documentName]: {
+        ...prev[documentName],
+        checked: !prev[documentName].checked,
+        details: prev[documentName].checked ? 
+          Object.fromEntries(Object.keys(prev[documentName].details).map(key => [key, false])) : 
+          prev[documentName].details,
+      }
+    }));
+  };
+
+  const handleDetailChange = (documentName: string, detailName: string) => {
+    setEditDocVerification(prev => ({
+      ...prev,
+      [documentName]: {
+        ...prev[documentName],
+        details: {
+          ...prev[documentName].details,
+          [detailName]: !prev[documentName].details[detailName],
+        }
+      }
+    }));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const updatedAssignment = {
+        assignmentid: assignment?.assignmentid,
+        assignment_name: editForm.assignment_name,
+        assignment_description: editForm.assignment_description,
+        assignment_date: editForm.assignment_date,
+        assignment_due_date: editForm.assignment_due_date,
+        validates: [{  // Match the same structure as create assignment
+          type: 'verification_requirements',
+          requirements: editDocVerification
+        }]
+      };
+
+      await onSave(updatedAssignment);
+      onClose(); // Close modal after successful save
+    } catch (err) {
+      console.error('Error updating assignment:', err);
+      alert('Failed to update assignment');
+    }
+  };
+
+  
+  return (
+    
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onClose}
+      className="fixed inset-0 z-50 overflow-y-auto bg-white"
+      overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+    >
+      <div className="min-h-screen">
+       
+        <div className="h-[70px]"></div>
+        
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-semibold text-gray-900">
+                  {assignment?.assignment_name}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  กำหนดส่ง {new Date(assignment?.assignment_due_date || '').toLocaleDateString('th-TH')}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex space-x-6 mt-6">
+              {['รายละเอียด', 'การส่งงาน'].map((tab) => {
+                const tabKey = tab === 'รายละเอียด' ? 'details' : 'dashboard';
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tabKey as 'details' | 'dashboard')}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors
+                      ${activeTab === tabKey 
+                        ? 'bg-blue-50 text-blue-600' 
+                        : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {activeTab === 'details' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ชื่องาน</label>
+                  <input
+                    type="text"
+                    value={editForm.assignment_name}
+                    onChange={(e) => setEditForm({...editForm, assignment_name: e.target.value})}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">กำหนดส่ง</label>
+                  <input
+                    type="date"
+                    value={editForm.assignment_due_date}
+                    onChange={(e) => setEditForm({...editForm, assignment_due_date: e.target.value})}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">คำอธิบาย</label>
+                  <textarea
+                    value={editForm.assignment_description}
+                    onChange={(e) => setEditForm({...editForm, assignment_description: e.target.value})}
+                    rows={6}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-4">ข้อกำหนดเอกสาร</h4>
+                  <div className="space-y-4">
+                    {Object.entries(editDocVerification).map(([docName, docValue]) => (
+                      <div key={docName} className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={docValue.checked}
+                            onChange={() => handleDocChange(docName)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-3 text-sm font-medium text-gray-700">{docName}</label>
+                        </div>
+                        {docValue.checked && (
+                          <div className="ml-7 mt-2 space-y-2">
+                            {Object.entries(docValue.details).map(([detailName, checked]) => (
+                              <div key={detailName} className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => handleDetailChange(docName, detailName)}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <label className="ml-3 text-sm text-gray-600">{detailName}</label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white rounded-xl border p-6">
+                  <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
+                  <div className="text-3xl font-semibold mt-2">
+                    {assignment?.validates?.length || 0}
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-xl border border-green-100 p-6">
+                  <div className="text-sm text-green-600">อนุมัติแล้ว</div>
+                  <div className="text-3xl font-semibold text-green-700 mt-2">
+                    {assignment?.validates?.filter(v => v.status === 'approved').length || 0}
+                  </div>
+                </div>
+                <div className="bg-yellow-50 rounded-xl border border-yellow-100 p-6">
+                  <div className="text-sm text-yellow-600">รอดำเนินการ</div>
+                  <div className="text-3xl font-semibold text-yellow-700 mt-2">
+                    {assignment?.validates?.filter(v => v.status === 'pending').length || 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  {/* ... existing table content ... */}
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex justify-end space-x-4">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              ปิด
+            </button>
+            {activeTab === 'details' && (
+              <button
+                onClick={handleSubmit}
+                className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                บันทึกการเปลี่ยนแปลง
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full border-b-4 border-blue-500 h-16 w-16 mb-4"></div>
+        <p className="text-xl">กำลังโหลดรายละเอียดวิชา...</p>
+      </div>
+    );
+  }
+
+  if (error || !subject) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+        <p className="text-xl text-red-600 mb-4">เกิดข้อผิดพลาด: {error || 'ไม่พบรายวิชา'}</p>
+        <Link href="/dashboard/admin/subjectManagement" className="text-blue-500 underline">
+          กลับไปหน้าจัดการรายวิชา
+        </Link>
+      </div>
+    );
+  }
+
+  const closeSidebar = () => {
+    setIsSidebarOpen(false);
+  };
+
+  const TeacherDisplayCard = ({ teacher }: { teacher: Teacher }) => {
+    const role = teacher.email?.endsWith('@kkumail.com')
+      ? 'Teacher Assistant'
+      : teacher.email?.endsWith('@kku.ac.th')
+      ? 'Teacher'
+      : 'No role';
+  
+    return (
+      <div>
+        <div>{teacher.username} {teacher.userlastname}</div>
+        <div className="text-sm text-gray-500">{role}</div>
+      </div>
+    );
+  };
+  
+  const TeachersTabContent = () => {  
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+      setTeacherSearchQuery(e.target.value);
+    }, []);
+  
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">อาจารย์</h2>
+          <button
+            onClick={openTeacherModal}
+            className="relative cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-4 py-2 transition-colors"
+          >
+            <span className="text-sm">จัดการอาจารย์</span>
+          </button>
+        </div>
+  
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {subject?.teachers?.map((teacher) => (
+            <TeacherDisplayCard key={teacher.userid} teacher={teacher} />
+          ))}
+        </div>
+  
+        <Modal
+          isOpen={isTeacherSelectionOpen}
+          onRequestClose={() => setIsTeacherSelectionOpen(false)}
+          ariaHideApp={false}
+          shouldCloseOnOverlayClick={false}
+          shouldCloseOnEsc={false}
+          className="fixed inset-0 flex items-center justify-center p-4 z-50"
+          overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">จัดการอาจารย์</h2>
+              <button
+                onClick={() => setIsTeacherSelectionOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+  
+            <input
+              type="text"
+              placeholder="ค้นหาครูผู้สอน..."
+              value={teacherSearchQuery}
+              onChange={handleSearchChange}
+              className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:ring-blue-500 focus:border-blue-500"
+            />
+  
+            <div className="max-h-96 overflow-y-auto mb-4">
+              <div className="grid gap-2">
+                {allUsers
+                  .filter(user => {
+                    const searchTerm = teacherSearchQuery.toLowerCase();
+                    const fullName = `${user.username || ''} ${user.userlastname || ''}`.toLowerCase();
+                    return fullName.includes(searchTerm);
+                  })
+                  .map(user => (
+                    <div
+                      key={user.userid}
+                      className="flex items-center p-3 border rounded-lg hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTeachers.includes(user.userid)}
+                        onChange={() => handleTeacherCheckbox(user.userid)}
+                        className="w-4 h-4 mr-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="flex-1">
+                        {`${user.username || ''} ${user.userlastname || ''}`}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+  
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setIsTeacherSelectionOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleTeacherSave}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                บันทึกการเปลี่ยนแปลง
+              </button>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    );
+  };
+  
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={closeSidebar} />
+      <Header openSidebar={() => setIsSidebarOpen(true)} />
+      
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20" onClick={closeSidebar} />
+      )}
+
+      <main className="pt-24 pb-16 px-4 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <nav className="mb-8 flex items-center space-x-2 text-sm">
+            <Link 
+              href="/dashboard/admin/subjectManagement"
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              รายวิชา
+            </Link>
+            <span className="text-gray-400">/</span>
+            <span className="text-gray-600">รายละเอียดวิชา</span>
+          </nav>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+            <div className="p-8">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    {subject?.subject_name}
+                  </h1>
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                    <span>กลุ่มเรียน {subject?.section}</span>
+                    <span>•</span>
+                    <span>ภาคการศึกษา {subject?.subject_semester}</span>
+                    <span>•</span>
+                    <span>ปีการศึกษา {subject?.subject_year}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handleEditToggle}
+                    className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    แก้ไขรายละเอียด
+                  </button>
+                  <button
+                    onClick={openFullScreenTaskForm}
+                    className="relative cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-4 py-2 transition-colors"
+                  >
+                    <span className="text-sm">สร้างงาน</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to delete this subject? This action cannot be undone.')) {
+                        handleDeleteSubject();
+                      }
+                    }}
+                    className="inline-flex items-center px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    ลบวิชา
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
+            <div className="border-b border-gray-200">
+              <div className="px-6">
+                <nav className="-mb-px flex space-x-4">
+                  {['นักศึกษา', 'อาจารย์', 'งาน'].map((tab) => {
+                    const tabKey = {
+                      'นักศึกษา': 'students',
+                      'อาจารย์': 'teachers',
+                      'งาน': 'tasks'
+                    }[tab];
+                    
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tabKey as 'students' | 'teachers' | 'tasks')}
+                        className={`py-4 px-4 text-sm font-medium border-b-2 transition-colors
+                          ${activeTab === tabKey
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                      >
+                        {tab}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <TabTransition isVisible={activeTab === 'students'}>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-900">นักศึกษา</h2>
+                    <div className="flex items-center space-x-3">
+                      <label className="relative cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-4 py-2 transition-colors">
+                        <span className="text-sm">นำเข้า Excel</span>
+                        <input
+                          type="file"
+                          accept=".xlsx, .xls"
+                          onChange={(e) => handleFileUpload(e, 'students')}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </label>
+                      {importedStudents.length > 0 && (
+                        <button
+                          onClick={handleSaveImportedStudents}
+                          className="bg-green-600 text-white text-sm rounded-lg px-4 py-2 hover:bg-green-700 transition-colors"
+                        >
+                          บันทึกการนำเข้า ({importedStudents.length})
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            รหัสนักศึกษา
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            ชื่อ
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            อีเมล
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            การดำเนินการ
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {subject?.students.map((student) => (
+                          <tr key={student.student_id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {student.student_id}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {`${student.username} ${student.userlastname}`}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {student.email}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                              <button
+                                onClick={() => handleRemoveStudent(student.student_id)}
+                                className="text-red-600 hover:text-red-900 transition-colors"
+                              >
+                                ลบ
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </TabTransition>
+
+              <TabTransition isVisible={activeTab === 'teachers'}>
+                <TeachersTabContent />
+              </TabTransition>
+
+              <TabTransition isVisible={activeTab === 'tasks'}>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between mb-8">
+                    <h2 className="text-xl font-semibold text-gray-900">งาน</h2>
+                    <button
+                      onClick={openFullScreenTaskForm}
+                      className="relative cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-4 py-2 transition-colors"
+                    >
+                      <span className="text-sm">สร้างงาน</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {assignments.map((assignment) => (
+                      <div
+                        key={assignment.assignmentid}
+                        className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow-md"
+                      >
+                        <div className="p-6">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-4">
+                              <div className="mt-1">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-medium text-gray-900">
+                                  {assignment.assignment_name}
+                                </h3>
+                                <div className="mt-1 text-sm text-gray-500">
+                                  โพสต์เมื่อ: {new Date(assignment.assignment_date).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })}
+                                </div>
+                                <div className="mt-3">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                    กำหนดส่ง {new Date(assignment.assignment_due_date).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </span>
+                                </div>
+                                {assignment.assignment_description && (
+                                  <p className="mt-3 text-sm text-gray-600">
+                                    {assignment.assignment_description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"
+                                onClick={() => handleDeleteAssignment(assignment.assignmentid)}
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between border-t pt-4">
+                            <div className="flex items-center space-x-4">
+                              <span className="text-sm text-gray-500">
+                                {assignment.validates?.length || 0} การส่ง
+                              </span>
+                              <span className="text-sm text-gray-500">•</span>
+                            </div>
+                            <div className="flex space-x-4">
+                              <button
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                onClick={() => {
+                                  setSelectedAssignment(assignment);
+                                  setIsAssignmentDetailOpen(true);
+                                }}
+                              >
+                                ดูรายละเอียด
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              {/* <button
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                onClick={() => {
+                                  setSelectedAssignment(assignment);
+                                  setIsDashboardOpen(true);
+                                }}
+                              >
+                                Dashboard
+                              </button> */}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </TabTransition>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {isCreatingTask && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl p-8
+                        transform transition-all duration-300 scale-100 opacity-100">
+            <div className="w-full max-w-4xl bg-white p-6 rounded-lg">
+              <h2 className="text-2xl font-semibold mb-4">สร้างงานใหม่</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="mb-4">
+                    <label className="block mb-2 font-medium">ชื่องาน</label>
+                    <input
+                      type="text"
+                      name="assignment_name"
+                      value={newAssignment.assignment_name}
+                      onChange={handleAssignmentChange}
+                      className="w-full border p-2 rounded"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block mb-2 font-medium">วันที่มอบหมาย</label>
+                    <input
+                      type="date"
+                      name="assignment_date"
+                      value={newAssignment.assignment_date}
+                      onChange={(e) => handleAssignmentChange(e)}
+                      className="w-full border p-2 rounded"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block mb-2 font-medium">กำหนดส่ง</label>
+                    <input
+                      type="date"
+                      name="assignment_due_date"
+                      value={newAssignment.assignment_due_date}
+                      onChange={(e) => handleAssignmentChange(e)}
+                      className="w-full border p-2 rounded"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-medium mb-4">ข้อกำหนดการตรวจสอบเอกสาร</h3>
+                  <div className="space-y-4">
+                    {Object.keys(documentVerification).map((docName) => (
+                      <div key={docName} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={documentVerification[docName].checked}
+                          onChange={() => handleDocumentChange(docName)}
+                          className="mr-2"
+                        />
+                        <span>{docName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <label className="block mb-2 font-medium">คำอธิบายงาน</label>
+              <textarea
+                name="assignment_description"
+                value={newAssignment.assignment_description}
+                onChange={handleAssignmentChange}
+                className="border rounded w-full p-2 mb-4 min-h-[100px]"
+                placeholder="กรอกคำแนะนำรายละเอียดสำหรับงาน..."
+              />
+
+              <div className="flex justify-end space-x-2 mt-6">
+                <button
+                  onClick={handleCreateAssignment}
+                  className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
+                >
+                  สร้างงาน
+                </button>
+                <button
+                  onClick={closeFullScreenTaskForm}
+                  className="bg-gray-300 text-gray-700 px-6 py-2 rounded hover:bg-gray-400"
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showPreview && importedStudents.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">ดูตัวอย่างนักศึกษาที่นำเข้า</h2>
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="max-h-[60vh] overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        รหัสนักศึกษา
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        ชื่อ
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        นามสกุล
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        อีเมล
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {importedStudents.map((student, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">{student.student_id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">{student.username}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">{student.userlastname}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">{student.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                <button
+                  onClick={() => {
+                    setImportedStudents([]);
+                    setShowPreview(false);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={() => {
+                    handleSaveImportedStudents();
+                    setShowPreview(false);
+                  }}
+                  className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  ยืนยันการนำเข้า
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <EditSubjectModal
+        isOpen={isEditing}
+        onClose={handleEditToggle}
+        subject={subject}
+        onSave={handleSaveSubject}
+      />
+      <AssignmentDetailModal
+        isOpen={isAssignmentDetailOpen}
+        onClose={() => setIsAssignmentDetailOpen(false)}
+        assignment={selectedAssignment}
+        onSave={async (updatedAssignment) => {
+          try {
+            const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=update-assignment`, {
+              method: 'PUT',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(updatedAssignment),
+            });
+      
+            if (!response.ok) {
+              throw new Error('Failed to update assignment');
+            }
+      
+            const result = await response.json();
+           
+            setAssignments(prev => 
+              prev.map(assignment => 
+                assignment.assignmentid === updatedAssignment.assignmentid 
+                  ? result.data 
+                  : assignment
+              )
+            );
+            
+            setIsAssignmentDetailOpen(false);
+            // alert('Assignment updated successfully');
+          } catch (error) {
+            console.error('Error updating assignment:', error);
+            alert('Failed to update assignment');
+          }
+        }}
+      />
+    </div>
+  );
+};
+
+export default SubjectDetailManagement;
