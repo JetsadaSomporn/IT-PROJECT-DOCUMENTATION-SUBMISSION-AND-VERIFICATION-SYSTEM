@@ -1,7 +1,3 @@
-ต่อไปนี้คือไฟล์ README ที่เขียนในสไตล์มืออาชีพ มีโครงสร้างชัดเจน อ่านง่าย และครอบคลุมข้อมูลสำคัญสำหรับโปรเจกต์ **IT-Document-Verification-System** ที่ใช้ Next.js และ PostgreSQL:
-
----
-
 # IT-Document-Verification-System
 
 ![Next.js](https://img.shields.io/badge/Next.js-14.0.0-black?style=flat&logo=next.js) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=flat&logo=postgresql) ![License](https://img.shields.io/badge/license-MIT-green)
