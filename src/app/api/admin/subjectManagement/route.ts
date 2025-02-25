@@ -1,88 +1,91 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
-import { getServerSession } from 'next-auth';  // Update import
-import { authOptions } from '../../auth/[...nextauth]/route'; // Changed to relative path
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import fs from 'fs';
+import path from 'path';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// Helper function to write logs
+const writeToLog = async (data: any) => {
+  const logDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logDir)){
+    fs.mkdirSync(logDir);
+  }
+  const logPath = path.join(logDir, 'database_state.txt');
+  
+  // Convert data to formatted text
+  const text = Object.entries(data.data).map(([tableName, rows]) => {
+    return `=== ${tableName} ===\n\n${
+      Array.isArray(rows) 
+        ? rows.map(row => JSON.stringify(row, null, 2)).join('\n\n')
+        : 'No data'
+    }\n\n`;
+  }).join('\n');
+
+  const header = `Database State as of ${data.timestamp}\n\n`;
+  
+  await fs.promises.writeFile(logPath, header + text);
+};
 
 export async function GET(request: Request) {
   console.log('GET request received');
   
   try {
     const session = await getServerSession(authOptions);
-    console.log('Server session:', JSON.stringify(session, null, 2));
-
-    if (!session) {
-      console.log('No session found');
+    if (!session?.user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    if (!session.user) {
-      console.log('No user in session');
-      return NextResponse.json({ error: 'No user found' }, { status: 401 });
-    }
-
-    console.log('User from session:', session.user);
-    console.log('User type:', session.user.type);
-    console.log('User userType:', session.user.userType);
-    
-    if (!session || !session.user) {
-      console.error('No valid session found');
-      return NextResponse.json({ 
-        error: 'Not authenticated',
-        session: session 
-      }, { status: 401 });
-    }
-
-    // Check for admin privileges using both type and userType
     const isAdmin = session.user.type?.includes('admin') || 
                    session.user.userType?.includes('admin');
-
     if (!isAdmin) {
-      console.error('User is not admin:', session.user);
-      return NextResponse.json({ 
-        error: 'Not authorized',
-        userType: session.user.type
-      }, { status: 403 });
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
     }
-
-    const url = new URL(request.url);
-    const searchQuery = url.searchParams.get('search') || '';
-    const yearFilter = url.searchParams.get('year') || '';
-
-    console.log('Search params:', { searchQuery, yearFilter });
-
-    let query = 'SELECT * FROM "Subject_Available" WHERE deleted IS NULL';
-    const params: any[] = [];
-
-    if (searchQuery) {
-      params.push(`%${searchQuery}%`);
-      query += ` AND LOWER(subject_name) LIKE LOWER($${params.length})`;
-    }
-
-    if (yearFilter) {
-      params.push(yearFilter);
-      query += ` AND subject_year = $${params.length}`;
-    }
-
-    query += ' ORDER BY created DESC';
-
-    console.log('Executing query:', query, params);
 
     const client = await pool.connect();
     try {
-      const res = await client.query(query, params);
-      console.log(`Found ${res.rows.length} results`);
-      return NextResponse.json(res.rows);
+      // Combined database state object
+      const databaseState = {
+        timestamp: new Date().toISOString(),
+        data: {} as { [key: string]: any[] }
+      };
+
+      // Fetch data from all tables
+      const tables = [
+        'Subject_Available',
+        'Assignment',
+        'Assignment_Sent', 
+        'Final_PDF',
+        'Group',
+        'User'
+      ];
+
+      // Fetch all tables data
+      for (const table of tables) {
+        const result = await client.query(`
+          SELECT * FROM "${table}" 
+          WHERE deleted IS NULL
+        `);
+        databaseState.data[table] = result.rows;
+      }
+
+      // Write as text file
+      await writeToLog(databaseState);
+
+      // Return Subject_Available data for the frontend
+      return NextResponse.json(databaseState.data['Subject_Available']);
+
     } finally {
       client.release();
     }
   } catch (error) {
-    console.error('Search error:', error);
+    console.error('Error:', error);
     return NextResponse.json({ 
-      error: 'Search failed',
+      error: 'Operation failed',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }

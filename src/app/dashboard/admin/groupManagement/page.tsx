@@ -237,17 +237,13 @@ const TrackBottomMenu: React.FC<{
 }> = ({ selectedTrack, onTrackSelect, filteredGroups, groups }) => {
   const getTrackCount = (track: TrackType) => {
     if (track === 'ALL') {
-      // counting group
       return groups.filter(group => group.students?.length > 0).length;
     }
     
-   
-    const trackGroups = groups.filter(group => 
-      group.groupname.startsWith(track) || 
-      group.students?.some(student => student?.track === track)
-    );
-
-    return trackGroups.length;
+    return groups.filter(group => 
+      group.groupname.startsWith(track) && 
+      group.students?.length > 0
+    ).length;
   };
 
   return (
@@ -368,10 +364,10 @@ const GroupManagement: React.FC = () => {
       if (data) {
         const updatedStudents = [...students];
         
-        const studentTrack = data.track;
+        const studentTrack = data.track || selectedTrack;
   
-        // Check if student's track matches selected track
-        if (selectedTrack !== 'ALL' && studentTrack !== selectedTrack) {
+       
+        if (selectedTrack !== 'ALL' && studentTrack && studentTrack !== selectedTrack) {
           alert(`Error: This student belongs to ${studentTrack} track and cannot be added to ${selectedTrack} track.`);
           updatedStudents[index] = {
             ...updatedStudents[index],
@@ -440,9 +436,7 @@ const GroupManagement: React.FC = () => {
 
 const filteredGroups = groups.filter(group => {
   if (selectedTrack === 'ALL') return true;
-  const groupTrackPrefix = group.groupname.startsWith(selectedTrack);
-  const hasStudentInTrack = group.students?.some(student => student?.track === selectedTrack);
-  return groupTrackPrefix || hasStudentInTrack;
+  return group.groupname.startsWith(selectedTrack);
 });
 
 
@@ -508,86 +502,88 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
     ...prev,
     [`${groupName}-${memberIndex}`]: value
   }));
-
+  
   const normalizedValue = value.replace(/[^0-9]/g, '');
-
-  if (!value) {
-    setGroups(prev => prev.map(g => {
-      if (g.groupname === groupName) {
-        const updatedStudents = [...(g.students || [])];
-        updatedStudents[memberIndex] = {} as User;
-        return {
-          ...g,
-          students: updatedStudents
-        };
-      }
-      return g;
-    }));
-    return;
-  }
-
   if (normalizedValue.length === 10) {
     try {
       const response = await fetch(`/api/admin/groupManagement?action=get-student&id=${normalizedValue}`);
-      if (!response.ok) throw new Error('Failed to fetch student');
-      
       const data = await response.json();
-      console.log('Fetched student data:', data);
+      if (!response.ok) {
+        alert(data.error || 'Failed to fetch student data');
+        return;
+      }
 
-      // Create new student object
-      const newStudent: User = {
+      const fetchedTrack = data.track || selectedTrack;
+      const updatedStudent = {
         userid: normalizedValue,
         username: data.username,
         userlastname: data.userlastname,
         email: data.email,
-        track: data.track,
+        track: fetchedTrack,
         type: data.type
       };
 
-      // Find or create group
-      let groupToUpdate = groups.find(g => g.groupname === groupName);
-      
-      if (!groupToUpdate) {
-        // Create new group if it doesn't exist
-        groupToUpdate = {
-          groupid: -1, // Temporary negative ID
-          groupname: groupName,
-          projectname: null,
-          subject: selectedSubject || 0,
-          teacher: [],
-          teacherother: null,
-          User: [],
-          note: null,
-          students: []
-        };
+      // Create a new group object if it doesn't exist
+      const currentGroup = groups.find(g => g.groupname === groupName) || {
+        groupid: Date.now(), // Temporary ID for new groups
+        groupname: groupName,
+        projectname: null,
+        subject: selectedSubject || 0,
+        teacher: [],
+        teacherother: null,
+        User: [],
+        note: null,
+        students: []
+      } as Group;
+
+      // Create a new array of students with the correct length
+      let updatedStudents = [...(currentGroup.students || [])];
+      while (updatedStudents.length <= memberIndex) {
+        updatedStudents.push({} as User);
       }
+      
+      // Update the specific slot
+      updatedStudents[memberIndex] = updatedStudent;
 
-      // Update students array
-      const updatedStudents = [...(groupToUpdate.students || [])];
-      updatedStudents[memberIndex] = newStudent;
-
-      // Save group
-      await saveGroup({
-        groupName,
-        members: updatedStudents
-          .filter(s => s && s.userid)
-          .map(s => ({
-            studentId: s.userid
-          })),
-        teachers: groupToUpdate.teacher || [],
-        note: groupToUpdate.note || ''
+      // Update groups state with proper type checking
+      setGroups(prev => {
+        const existingGroupIndex = prev.findIndex(g => g.groupname === groupName);
+        
+        if (existingGroupIndex >= 0) {
+          // Update existing group
+          const newGroups = [...prev];
+          newGroups[existingGroupIndex] = {
+            ...newGroups[existingGroupIndex],
+            students: updatedStudents
+          };
+          return newGroups;
+        } else {
+          // Add new group
+          return [...prev, {
+            ...currentGroup,
+            students: updatedStudents
+          }];
+        }
       });
 
-      await fetchGroups();
+      // Save to backend with only valid students
+      await saveGroup({
+        groupName,
+        members: updatedStudents.filter(s => s?.userid).map(s => ({
+          studentId: s.userid
+        })),
+        teachers: currentGroup.teacher,
+        note: currentGroup.note || ''
+      });
 
     } catch (error) {
       console.error('Error processing student:', error);
+      alert('Failed to add student. Please try again.');
     }
   }
 };
 
 
-//remove member
 const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
   const currentGroup = groups.find(g => g.groupname === groupName);
   if (!currentGroup) return;
@@ -598,19 +594,15 @@ const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
 
     const filteredMembers = updatedMembers
       .filter(member => member && member.userid)
-      .map(member => ({
-        studentId: member.userid
-      }));
+      .map(member => ({ studentId: member.userid }));
 
-    // clear project title 
+    
     if (filteredMembers.length === 0) {
       setProjectTitles(prev => {
         const newTitles = { ...prev };
         delete newTitles[groupName];
         return newTitles;
       });
-      
-      
       setNoteTitles(prev => {
         const newNotes = { ...prev };
         delete newNotes[groupName];
@@ -630,7 +622,15 @@ const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
       [`${groupName}-${memberIndex}`]: ''
     }));
 
-    await fetchGroups();
+    // Update local state for only this group instead of refetching all groups.
+    setGroups(prev => prev.map(g => {
+      if (g.groupname === groupName) {
+        return { ...g, students: updatedMembers };
+      }
+      return g;
+    }));
+
+    // Removed: await fetchGroups();
   } catch (error) {
     console.error('fail removing student:', error);
   }
@@ -641,52 +641,67 @@ const [projectTitles, setProjectTitles] = useState<{[key: string]: string}>({});
 const [projectNameTimeout, setProjectNameTimeout] = useState<{[key: string]: NodeJS.Timeout}>({});
 
 const ProjectNameEdit = async (groupName: string, projectName: string) => {
-  
+  // Update local state immediately 
   setProjectTitles(prev => ({
     ...prev,
     [groupName]: projectName
   }));
 
-
+  // Clear existing timeout
   if (projectNameTimeout[groupName]) {
     clearTimeout(projectNameTimeout[groupName]);
   }
 
- 
   const timeoutId = setTimeout(async () => {
     try {
       const groupToUpdate = groups.find(g => g.groupname === groupName);
       if (!groupToUpdate) return;
 
+      // Update local state first
+      setGroups(prev => prev.map(g => {
+        if (g.groupname === groupName) {
+          return {
+            ...g,
+            projectname: projectName
+          };
+        }
+        return g;
+      }));
+
+      // Save to backend
       await saveGroup({
         groupName,
-        members: groupToUpdate.students.map(s => ({
-          studentId: s.userid,
-        })),
-        teachers: groupToUpdate.teacher,
-        note: groupToUpdate.note || undefined,
-        projectName
+        members: groupToUpdate.students
+          .filter(s => s && s.userid)
+          .map(s => ({
+            studentId: s.userid,
+          })),
+        teachers: groupToUpdate.teacher || [],
+        note: groupToUpdate.note || '',
+        projectName: projectName
       });
 
-      await fetchGroups();
+      setProjectTitles(prev => {
+        const newState = { ...prev };
+        delete newState[groupName];
+        return newState;
+      });
+
     } catch (error) {
-      console.error('fail saving project name:', error);
+      console.error('Failed to save project name:', error);
+      // Revert to previous value on error
+      setProjectTitles(prev => ({
+        ...prev,
+        [groupName]: groups.find(g => g.groupname === groupName)?.projectname || ''
+      }));
     }
-  }, 5000); 
+  }, 2000);
 
   setProjectNameTimeout(prev => ({
     ...prev,
     [groupName]: timeoutId
   }));
 };
-
-useEffect(() => {
-  return () => {
-    Object.values(projectNameTimeout).forEach(timeoutId => {
-      clearTimeout(timeoutId);
-    });
-  };
-}, [projectNameTimeout]);
 
 
 const [noteTitles, setNoteTitles] = useState<{[key: string]: string}>({});
@@ -739,18 +754,37 @@ useEffect(() => {
 const showTrackInfo = () => {
   const currentSubject = subjects.find(sub => sub.subjectid === selectedSubject);
   const relevantGroups = selectedTrack === 'ALL' ? groups : filteredGroups;
-  const allGroups = selectedTrack === 'ALL'
+  
+  // Create all groups including empty slots
+  let allGroups = selectedTrack === 'ALL'
     ? relevantGroups
-    : [...relevantGroups, ...createEmptyGroupSlots(selectedTrack)].sort((a, b) => {
-        const numA = parseInt(a.groupname.match(/\d+$/)?.[0] || '0');
-        const numB = parseInt(b.groupname.match(/\d+$/)?.[0] || '0');
-        return numA - numB;
-      });
+    : [...relevantGroups];
 
-  //counting
-  const registeredGroupCount = selectedTrack === 'ALL' 
-    ? groups.filter(g => g.students?.length > 0).length
-    : groups.filter(g => g.students?.length > 0 && g.groupname.startsWith(selectedTrack)).length;
+  // Add empty slots only for non-ALL tracks
+  if (selectedTrack !== 'ALL') {
+    const emptySlots = createEmptyGroupSlots(selectedTrack);
+    allGroups = [...allGroups, ...emptySlots];
+  }
+
+  // Sort groups by number
+  allGroups.sort((a, b) => {
+    const numA = parseInt(a.groupname.match(/\d+$/)?.[0] || '0');
+    const numB = parseInt(b.groupname.match(/\d+$/)?.[0] || '0');
+    return numA - numB;
+  });
+
+  // Remove duplicates
+  const uniqueGroups = allGroups.filter((group, index, self) =>
+    index === self.findIndex((g) => g.groupname === group.groupname)
+  );
+
+  // Count only groups with students
+  const registeredGroupCount = selectedTrack === 'ALL'
+    ? groups.filter(g => g.students?.some(s => s.userid)).length
+    : groups.filter(g => 
+        g.groupname.startsWith(selectedTrack) && 
+        g.students?.some(s => s.userid)
+      ).length;
 
   return (
     <div className="space-y-8">
@@ -775,8 +809,8 @@ const showTrackInfo = () => {
 
       {/* Groups Section */}
       <div className="space-y-6">
-        {allGroups.map((group) => (
-          <div key={group.groupid} className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {uniqueGroups.map((group) => (
+          <div key={group.groupid || group.groupname} className="bg-white rounded-lg shadow-lg overflow-hidden">
             {/* Group Name Row - Spans entire width */}
             <div className="bg-blue-600 px-6 py-3">
               <h3 className="text-xl font-semibold text-white">{group.groupname}</h3>
@@ -792,6 +826,7 @@ const showTrackInfo = () => {
                   onChange={(e) => ProjectNameEdit(group.groupname, e.target.value)}
                   className="flex-1 px-3 py-2 border rounded"
                   placeholder="Enter project title..."
+                  disabled={selectedTrack === 'ALL'} 
                 />
               </div>
             </div>
@@ -810,27 +845,33 @@ const showTrackInfo = () => {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Note</th>
                   </tr>
                 </thead>
-
-                {/* Member Rows */}
                 <tbody>
-                  {[0, 1].map((memberIndex) => {
-                    const student = (group.students || [])[memberIndex] || {};
-                    return (
-                      <tr key={memberIndex} className="border-b last:border-0">
-                        <td className="px-4 py-2">{memberIndex + 1}</td>
+                  {(() => {
+                    // Allow for flexible number of slots (1-3 members)
+                    const maxSlots = 3;
+                    const memberRows = group.students ? [...group.students] : [];
+                    // Add empty slots up to maxSlots
+                    while (memberRows.length < maxSlots) {
+                      memberRows.push({} as any);
+                    }
+                    
+                    return memberRows.map((student, index) => (
+                      <tr key={index} className="border-b last:border-0">
+                        <td className="px-4 py-2">{index + 1}</td>
                         <td className="px-4 py-2">
                           <div className="flex items-center space-x-2">
                             <input
                               type="text"
-                              value={student?.userid || inputValue[`${group.groupname}-${memberIndex}`] || ''}
-                              onChange={(e) => stuInput(e.target.value, group.groupname, memberIndex)}
-                              className="w-32 px-2 py-1 border rounded"
+                              value={student?.userid || inputValue[`${group.groupname}-${index}`] || ''}
+                              onChange={(e) => stuInput(e.target.value, group.groupname, index)}
+                              className="w-32 px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Student ID"
                               maxLength={11}
+                              disabled={selectedTrack === 'ALL'}
                             />
-                            {(student?.userid || inputValue[`${group.groupname}-${memberIndex}`]) && (
+                            {(student?.userid || inputValue[`${group.groupname}-${index}`]) && (
                               <button
-                                onClick={() => handleRemoveStudent(group.groupname, memberIndex)}
+                                onClick={() => handleRemoveStudent(group.groupname, index)}
                                 className="p-1 text-gray-400 hover:text-red-500"
                                 title="Clear student"
                               >
@@ -841,29 +882,28 @@ const showTrackInfo = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2">
-                          {student?.username} {student?.userlastname}
-                        </td>
+                        <td className="px-4 py-2">{student?.username} {student?.userlastname}</td>
                         <td className="px-4 py-2">{student?.track}</td>
-                        {memberIndex === 0 && (
+                        {index === 0 && (
                           <>
-                            <td rowSpan={2} className="px-4 py-2">
+                            <td rowSpan={maxSlots} className="px-4 py-2">
                               <AdvisorDropdown groupName={group.groupname} group={group} />
                             </td>
-                            <td rowSpan={2} className="px-4 py-2">
+                            <td rowSpan={maxSlots} className="px-4 py-2">
                               <input
                                 type="text"
                                 value={noteTitles[group.groupname] ?? group.note ?? ''}
                                 onChange={(e) => NoteEdit(group.groupname, e.target.value)}
                                 className="w-full px-2 py-1 border rounded"
                                 placeholder="Add note..."
+                                disabled={selectedTrack === 'ALL'}
                               />
                             </td>
                           </>
                         )}
                       </tr>
-                    );
-                  })}
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -937,6 +977,9 @@ const showTrackInfo = () => {
       if (!selectedSubject) return null;
     
       try {
+        // Filter out empty member slots before saving
+        const validMembers = groupData.members.filter(m => m.studentId && m.studentId.trim() !== '');
+
         const response = await fetch('/api/admin/groupManagement', {
           method: 'POST',
           headers: {
@@ -946,7 +989,7 @@ const showTrackInfo = () => {
             subjectId: selectedSubject,
             groups: [{
               ...groupData,
-              members: groupData.members.map(m => ({
+              members: validMembers.map(m => ({
                 ...m,
                 studentId: m.studentId.replace(/[^0-9]/g, '')
               }))
@@ -954,10 +997,7 @@ const showTrackInfo = () => {
           })
         });
     
-        console.log('save', groupData);
-        
         if (!response.ok) throw new Error('Failed to save group');
-        await fetchGroups();
         return response;
       } catch (error) {
         console.error('fail saving group:', error);
@@ -1015,36 +1055,81 @@ const showTrackInfo = () => {
   
     return (
       <div className="relative">
+       
         <button
           type="button"
           onClick={() => setIsDropdownVisible(!isDropdownVisible)}
-          className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded"
+          className="w-full px-4 py-2 text-base bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={selectedTrack === 'ALL'} // disable in ALL view
         >
           Select Advisors ({selectedAdvisors.length}/2)
         </button>
+  
         {isDropdownVisible && (
-          <div className="absolute z-50 mt-1 w-64 bg-white border rounded-md shadow-lg">
-            <div className="p-2">
-              {allTeachers.map(teacher => (
-                <label key={teacher.userid} className="flex items-center p-1">
-                  <input
-                    type="checkbox"
-                    checked={selectedAdvisors.includes(teacher.userid)}
-                    onChange={() => handleTeacherSelection(teacher.userid)}
-                    className="mr-2"
-                  />
-                  {teacher.username} {teacher.userlastname}
-                </label>
-              ))}
+          <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 className="text-lg font-semibold text-gray-900">Select Advisors</h3>
+                <button
+                  onClick={() => setIsDropdownVisible(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <span className="sr-only">Close</span>
+                  ✕
+                </button>
+              </div>
+  
+              {/* Content area with scroll */}
+              <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+                {allTeachers.map(teacher => (
+                  <label 
+                    key={teacher.userid} 
+                    className="flex items-center p-3 mb-2 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAdvisors.includes(teacher.userid)}
+                      onChange={() => handleTeacherSelection(teacher.userid)}
+                      className="mr-4 w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-base font-medium text-gray-900">
+                        {teacher.username} {teacher.userlastname}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+  
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-gray-200">
+                <button
+                  onClick={() => setIsDropdownVisible(false)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         )}
-        <div className="mt-1 text-xs">
-          {selectedAdvisors.map((teacherId, index) => {
+  
+        {/* Selected advisors display */}
+        <div className="mt-2 space-y-2">
+          {selectedAdvisors.map((teacherId) => {
             const teacher = allTeachers.find(t => t.userid === teacherId);
             return teacher ? (
-              <div key={teacherId}>
-                {teacher.username} {teacher.userlastname}
+              <div key={teacherId} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+                <span className="text-sm font-medium text-blue-700">
+                  {teacher.username} {teacher.userlastname}
+                </span>
+                <button
+                  onClick={() => handleTeacherSelection(teacherId)}
+                  className="text-blue-400 hover:text-blue-600"
+                >
+                  ✕
+                </button>
               </div>
             ) : null;
           })}
@@ -1052,76 +1137,57 @@ const showTrackInfo = () => {
       </div>
     );
   }
-
+  
 
 const INITIAL_GROUP_COUNT = 20;
 
 const createEmptyGroupSlots = (track: TrackType) => {
   if (track === 'ALL') return [];
-  
-  const trackGroups = groups.filter(group => 
-    group.groupname.startsWith(track) || 
-    group.students?.some(student => student?.track === track)
+
+  // Get existing groups for this track only
+  const trackGroups = groups.filter(group => group.groupname.startsWith(track));
+
+  // Get existing group numbers
+  const existingNumbers = trackGroups
+    .map(g => {
+      const match = g.groupname.match(/\d+$/);
+      return match ? parseInt(match[0]) : 0;
+    })
+    .filter(num => !isNaN(num));
+
+  // Get highest existing group number
+  const highestGroupNum = Math.max(0, ...existingNumbers);
+
+  // Create array of needed numbers from 1 to INITIAL_GROUP_COUNT
+  const neededNumbers = Array.from(
+    { length: INITIAL_GROUP_COUNT }, 
+    (_, i) => i + 1
   );
 
-  const highestGroupNum = trackGroups.reduce((max, group) => {
-    const match = group.groupname.match(/\d+$/);
-    const num = match ? parseInt(match[0]) : 0;
-    return Math.max(max, num);
-  }, 0);
+  // Find missing numbers in the sequence
+  const missingNumbers = neededNumbers.filter(
+    num => !existingNumbers.includes(num)
+  );
 
-  if (highestGroupNum === 0) {
-    return Array.from({ length: INITIAL_GROUP_COUNT }, (_, i) => ({
-      groupid: -(i + 1),
-      groupname: `${track}${String(i + 1).padStart(2, '0')}`,
-      projectname: null,
-      subject: selectedSubject || 0,
-      teacher: [],
-      teacherother: null,
-      User: [],
-      note: null,
-      students: []
-    }));
+  // If we have 19 or more filled groups, add the next number
+  const filledGroups = trackGroups.filter(g => g.students?.some(s => s.userid));
+  if (filledGroups.length >= 19) {
+    const nextNumber = Math.max(highestGroupNum + 1, INITIAL_GROUP_COUNT + 1);
+    missingNumbers.push(nextNumber);
   }
 
-  
-  if (trackGroups.length >= highestGroupNum) {
-    return [{
-      groupid: -(highestGroupNum + 1),
-      groupname: `${track}${String(highestGroupNum + 1).padStart(2, '0')}`,
-      projectname: null,
-      subject: selectedSubject || 0,
-      teacher: [],
-      teacherother: null,
-      User: [],
-      note: null,
-      students: []
-    }];
-  }
-
-
-  const existingNumbers = trackGroups.map(g => {
-    const match = g.groupname.match(/\d+$/);
-    return match ? parseInt(match[0]) : 0;
-  });
-  // Find first missing number in sequence
-  for (let i = 1; i <= highestGroupNum + 1; i++) {
-    if (!existingNumbers.includes(i)) {
-      return [{
-        groupid: -i,
-        groupname: `${track}${String(i).padStart(2, '0')}`,
-        projectname: null,
-        subject: selectedSubject || 0,
-        teacher: [],
-        teacherother: null,
-        User: [],
-        note: null,
-        students: []
-      }];
-    }
-  }
-
-  return [];
+  // Create empty groups for all missing numbers
+  return missingNumbers.map(num => ({
+    groupid: -num,
+    groupname: `${track}${String(num).padStart(2, '0')}`,
+    projectname: null,
+    subject: selectedSubject || 0,
+    teacher: [],
+    teacherother: null,
+    User: [],
+    note: null,
+    students: []
+  }));
 };
 
   return (

@@ -14,14 +14,15 @@ export async function GET(req: NextRequest) {
   const client = await pool.connect();
   try {
     if (action === 'get-student') {
-      //get only num
+      // Normalize the student ID first
       const normalizedId = id?.replace(/[^0-9]/g, '');
       
+      console.log('Looking up student with normalized ID:', normalizedId);
+      
       if (!normalizedId || normalizedId.length !== 10) {
-        return NextResponse.json({ error: 'invalid studentid' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid student ID' }, { status: 400 });
       }
 
-      //get not null student 
       const query = `
         SELECT 
           userid,
@@ -39,23 +40,32 @@ export async function GET(req: NextRequest) {
       
       try {
         const result = await client.query(query, [normalizedId]);
+        console.log('Student lookup result:', result.rows[0]);
         
         if (result.rows.length === 0) {
-          return NextResponse.json({ error: 'student not found' }, { status: 404 });
+          return NextResponse.json({ error: 'Student not found' }, { status: 404 });
         }
         
+  
+        const fallbackTrack = searchParams.get('track');
+      
+        if (fallbackTrack) {
+          result.rows[0].track = fallbackTrack;
+        }
+        
+      
         return NextResponse.json({
           ...result.rows[0],
-          userid: normalizedId
+          userid: normalizedId // Ensure normalized ID is returned
         });
       } catch (error) {
-        console.error('database error:', error);
-        return NextResponse.json({ error: 'database error' }, { status: 500 });
+        console.error('Database error:', error);
+        return NextResponse.json({ error: 'Database error' }, { status: 500 });
       }
     }
     
+    // Handle get-subjects action
     if (action === 'get-subjects') {
-      //get all subject
       const subjectsQuery = `
         SELECT 
           subjectid, 
@@ -71,24 +81,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(subjectsResult.rows);
     }
 
+    // Add get-teachers action
     if (action === 'get-teachers') {
-      //get all teachers and admin
       const teachersQuery = `
-      SELECT userid, username, userlastname, email
-      FROM "User"
-      WHERE (email LIKE '%@kku.ac.th' AND track = 'teacher')
-      OR type @> ARRAY['admin']::text[]
-      OR type @> ARRAY['teacher']::text[]
-      AND deleted IS NULL
-      ORDER BY username, userlastname;
+        SELECT userid, username, userlastname, email
+        FROM "User"
+        WHERE (email LIKE '%@kku.ac.th' AND track = 'teacher')
+        OR type @> ARRAY['admin']::text[]
+        AND deleted IS NULL
+        ORDER BY username, userlastname;
       `;
-      
       
       const teachersResult = await client.query(teachersQuery);
       return NextResponse.json(teachersResult.rows);
     }
 
-    //get groups with member detail
+    // Update the groups query to properly join with User table and include track
     const groupQuery = `
       WITH group_members AS (
         SELECT 
@@ -134,7 +142,7 @@ export async function GET(req: NextRequest) {
           'username', m.username,
           'userlastname', m.userlastname,
           'email', m.email,
-          'track', m.track 
+          'track', m.track
         )) FILTER (WHERE m.userid IS NOT NULL) as students
       FROM "Group" g
       LEFT JOIN group_members m ON m.groupid = g.groupid
@@ -152,39 +160,51 @@ export async function GET(req: NextRequest) {
       ORDER BY g.groupname;
     `;
 
+    // Fix the response handling to ensure we return an array
     if (subject) {
       try {
         const groupResult = await client.query(groupQuery, [subject]);
         
-        //format return data
-        const formattedRows = groupResult.rows.map(row => ({
-          ...row,
-          teachers: Array.isArray(row.teachers) ? row.teachers : [],
-          students: Array.isArray(row.students) ? row.students : [],
-          teacher_name: row.teachers?.[0] ? 
-            `${row.teachers[0].username} ${row.teachers[0].userlastname}` : '',
-          teacherother: row.teacherother_text ? JSON.parse(row.teacherother_text) : null
-        }));
+        const formattedRows = groupResult.rows.map(row => {
+          // Ensure teachers and students are arrays, even if null/undefined
+          const teachers = Array.isArray(row.teachers) ? row.teachers : [];
+          const students = Array.isArray(row.students) ? row.students : [];
+          
+          return {
+            ...row,
+            teachers,
+            students,
+            teacher_name: teachers.length > 0 ? 
+              `${teachers[0].username} ${teachers[0].userlastname}` : '',
+            teacherother: row.teacherother_text ? JSON.parse(row.teacherother_text) : null
+          };
+        });
 
         return NextResponse.json(formattedRows);
       } catch (error) {
-        console.error('database error:', error);
+        console.error('Database error:', error);
         return NextResponse.json([]); 
       }
     }
 
+    // Return empty array if no subject is selected
     return NextResponse.json([]);
 
   } catch (error) {
-    console.error('database error:', error);
-    return NextResponse.json({ error: 'internal Server Error' }, { status: 500 });
+    console.error('Database error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   } finally {
     client.release();
   }
 }
 
+// Update POST method to handle student IDs as text
+interface GroupMember {
+  studentId: string;
+  teacher?: string;  // Changed from advisor
+}
 
-
+// Update the POST method to properly handle empty student slots
 export async function POST(request: Request) {
   const { subjectId, groups } = await request.json();
   const client = await pool.connect();
@@ -194,87 +214,41 @@ export async function POST(request: Request) {
     
     const group = groups[0];
     const groupName = group.groupName;
+    const projectName = group.projectName;
 
-    // Keep all member 
+    // Process members...
+    const memberIds = (group.members || [])
+      .map(m => m.studentId ? m.studentId.replace(/[^0-9]/g, '') : null)
+      .filter((id): id is string => id !== null && id.length === 10);
 
-    interface GroupMember {
-      studentId: string;
-      teacher?: string;
-    }
-
-
-    const memberIds: string[] = (group.members || [] as GroupMember[])
-      .map((m: GroupMember): string | null => 
-        m && m.studentId ? m.studentId.replace(/[^0-9]/g, '') : null
-      )
-      .filter((id): id is string => 
-        id !== null && id.length === 10
-      );
-
-    console.log('formatted member id:', memberIds);
-
-    //check duplicate
-    if (memberIds.length > 0) {
-      const duplicateCheck = await client.query(
-        `SELECT g.groupname, u.userid, u.username, u.userlastname
-         FROM "Group" g
-         CROSS JOIN unnest(g."User") AS member_id
-         LEFT JOIN "User" u ON u.userid = member_id::text
-         WHERE g.subject = $1 
-         AND g.groupname != $2
-         AND g.deleted IS NULL
-         AND member_id = ANY($3::text[])`,
-        [subjectId, groupName, memberIds]
-      );
-
-      if (duplicateCheck.rows.length > 0) {
-        const duplicates = duplicateCheck.rows.map(row => 
-          `${row.username} ${row.userlastname} (${row.userid}) is already in group ${row.groupname}`
-        ).join('\n');
-        
-        await client.query('ROLLBACK');
-        return NextResponse.json({ 
-          error: 'dupli stu found', 
-          message: duplicates 
-        }, { status: 400 });
-      }
-    }
-
-    //check if group exist
+    // Check for existing group
     const existingGroup = await client.query(
-      `SELECT groupid FROM "Group" 
+      `SELECT groupid, projectname FROM "Group" 
        WHERE groupname = $1 AND subject = $2 AND deleted IS NULL`,
       [groupName, subjectId]
     );
 
-    //if no member, delete the group
-    if (memberIds.length === 0 && existingGroup.rows.length > 0) {
+    if (existingGroup.rows.length > 0) {
+      // Update existing group, keeping project name if not provided
       await client.query(
-        `DELETE FROM "Group" 
-         WHERE groupid = $1`,
-        [existingGroup.rows[0].groupid]
-      );
-    } else if (existingGroup.rows.length > 0) {
-      //update group if it has members
-      const updateResult = await client.query(
         `UPDATE "Group" 
          SET "User" = $1::character varying[],
              teacher = $2::character varying[],
              note = $3,
-             projectname = $4,
+             projectname = COALESCE($4, projectname),
              updated = CURRENT_TIMESTAMP
          WHERE groupid = $5`,
         [
           memberIds,
           group.teachers || [],
           group.note || null,
-          group.projectName || null,
+          projectName, // Will keep existing value if projectName is null
           existingGroup.rows[0].groupid
         ]
       );
     } else if (memberIds.length > 0) {
-      
-      const insertResult = await client.query(
+      // Insert new group
+      await client.query(
         `INSERT INTO "Group" (
           groupname, 
           subject, 
@@ -282,37 +256,36 @@ export async function POST(request: Request) {
           teacher, 
           note,
           projectname
-        ) VALUES ($1, $2, $3::character varying[], $4::character varying[], $5, $6)
-        RETURNING *`,
+        ) VALUES ($1, $2, $3::character varying[], $4::character varying[], $5, $6)`,
         [
           groupName,
           subjectId,
           memberIds,
           group.teachers || [],
           group.note || null,
-          group.projectName || null 
+          projectName
         ]
       );
     }
 
     await client.query('COMMIT');
     return NextResponse.json({ success: true });
+
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error saving group:', error);
-    return NextResponse.json({ 
-      error: 'failed to save group',
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to save group' }, { status: 500 });
   } finally {
     client.release();
   }
 }
 
+// Update PUT endpoint to handle string array
 export async function PUT(request: Request) {
   const { groupId, students } = await request.json();
 
   if (!groupId || !Array.isArray(students)) {
-    return NextResponse.json({ error: 'have to use groupid and student' }, { status: 400 });
+    return NextResponse.json({ error: 'Group ID and students array are required' }, { status: 400 });
   }
 
   // Remove dashes and skip empty
@@ -332,13 +305,13 @@ export async function PUT(request: Request) {
     const result = await client.query(updateQuery, [studentIds, groupId]);
     
     if (result.rowCount === 0) {
-      return NextResponse.json({ error: 'group not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
     return NextResponse.json(result.rows[0]);
   } catch (error) {
-    console.error('database error:', error);
-    return NextResponse.json({ error: 'Server Error' }, { status: 500 });
+    console.error('Database error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   } finally {
     client.release();
   }

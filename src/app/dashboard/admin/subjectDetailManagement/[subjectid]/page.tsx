@@ -12,6 +12,122 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBook, faUserGraduate, faUser } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../../hooks/useAuth';
 import { signOut } from 'next-auth/react';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { Bar, Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+// Add this custom CSS near the top of your file
+const datePickerStyles = `
+  .react-datepicker {
+    font-family: 'Inter', -apple-system, sans-serif;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 16px;
+    background: white;
+  }
+
+  .react-datepicker__header {
+    background: white;
+    border: none;
+    padding: 0;
+    margin-bottom: 16px;
+  }
+
+  .react-datepicker__month-container {
+    float: none;
+  }
+
+  .react-datepicker__day-names {
+    margin-top: 12px;
+  }
+
+  .react-datepicker__day-name {
+    color: #6B7280;
+    font-weight: 500;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    margin: 0;
+  }
+
+  .react-datepicker__day {
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    margin: 0;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .react-datepicker__day:hover {
+    background: #F3F4F6;
+    border-radius: 50%;
+  }
+
+  .react-datepicker__day--selected {
+    background: #3B82F6 !important;
+    border-radius: 50%;
+    font-weight: 600;
+  }
+
+  .react-datepicker__day--keyboard-selected {
+    background: #DBEAFE;
+    border-radius: 50%;
+  }
+
+  .react-datepicker__month-select,
+  .react-datepicker__year-select {
+    border: 1px solid #E5E7EB;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #374151;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .react-datepicker__month-select:hover,
+  .react-datepicker__year-select:hover {
+    border-color: #3B82F6;
+  }
+
+  .react-datepicker__navigation {
+    top: 20px;
+  }
+
+  .react-datepicker__navigation--previous {
+    left: 20px;
+  }
+
+  .react-datepicker__navigation--next {
+    right: 20px;
+  }
+`;
 
 interface Student {
   student_id: string;
@@ -365,6 +481,8 @@ const SubjectDetailManagement: React.FC = () => {
     assignment_due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0],
+    start_time: '00:00',
+    due_time: '23:59',
   });
   const [documentVerification, setDocumentVerification] = useState<{
     [key: string]: {
@@ -375,44 +493,44 @@ const SubjectDetailManagement: React.FC = () => {
     };
   }>({
     'เอกสารยืนยันหัวข้อโครงงาน': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'สรุปการเข้าพบอาจารย์ที่ปรึกษา': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'หลักฐานการเข้าร่วมการแข่งขัน': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'รายงานความก้าวหน้า': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'คู่มือ': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
   });
 
@@ -844,6 +962,8 @@ const SubjectDetailManagement: React.FC = () => {
       assignment_due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split('T')[0],
+      start_time: '00:00',
+      due_time: '23:59',
     });
   };
 
@@ -928,6 +1048,26 @@ const SubjectDetailManagement: React.FC = () => {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
+const TimeInput = ({ value, onChange, className = "" }: { 
+  value: string; 
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  className?: string;
+}) => (
+  <div className={`relative ${className}`}>
+    <input
+      type="time"
+      value={value}
+      onChange={onChange}
+      className="w-full min-w-[140px] px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white shadow-sm hover:border-blue-300"
+    />
+    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </div>
+  </div>
+);
+
 const AssignmentDetailModal = ({ 
   isOpen, 
   onClose, 
@@ -946,7 +1086,8 @@ const AssignmentDetailModal = ({
     assignment_date: '',
     assignment_due_date: '',
     validates: [] as ValidateItem[],
-    doc_verification: {} as Assignment['doc_verification']
+    doc_verification: {} as Assignment['doc_verification'],
+    due_time: '23:59',
   });
 
   const [editDocVerification, setEditDocVerification] = useState<{
@@ -958,48 +1099,51 @@ const AssignmentDetailModal = ({
     };
   }>({
     'เอกสารยืนยันหัวข้อโครงงาน': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'สรุปการเข้าพบอาจารย์ที่ปรึกษา': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'หลักฐานการเข้าร่วมการแข่งขัน': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'รายงานความก้าวหน้า': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
     'คู่มือ': { checked: false, details: {
-      'ชื่อไฟล์ถูกต้อง': false,
-      'ชื่อโครงงาน': false,
-      'รายชื่อนักศึกษา': false,
-      'หมายเลขกลุ่ม': false,
-      'ชื่ออาจารย์ที่ปรึกษา': false,
-      'ลายเซ็นอาจารย์': false,
+      // 'ชื่อไฟล์ถูกต้อง': false,
+      // 'ชื่อโครงงาน': false,
+      // 'รายชื่อนักศึกษา': false,
+      // 'หมายเลขกลุ่ม': false,
+      // 'ชื่ออาจารย์ที่ปรึกษา': false,
+      // 'ลายเซ็นอาจารย์': false,
     }},
   });
 
   const [selectedValidation, setSelectedValidation] = useState<ValidationData | null>(null);
+
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
 
   useEffect(() => {
     if (assignment) {
@@ -1009,7 +1153,8 @@ const AssignmentDetailModal = ({
         assignment_date: assignment.assignment_date.split('T')[0],
         assignment_due_date: assignment.assignment_due_date.split('T')[0],
         validates: assignment.validates || [],
-        doc_verification: assignment.validates?.[0]?.requirements || {}
+        doc_verification: assignment.validates?.[0]?.requirements || {},
+        due_time: '23:59',
       });
       
       // set document verification from validates 
@@ -1067,7 +1212,49 @@ const AssignmentDetailModal = ({
     }
   };
 
-  
+  // Update the time input styling in your components with this new component:
+const TimeInput = ({ value, onChange, className = "" }: { 
+  value: string; 
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  className?: string;
+}) => (
+  <div className={`relative ${className}`}>
+    <input
+      type="time"
+      value={value}
+      onChange={onChange}
+      className="w-full min-w-[140px] px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white shadow-sm hover:border-blue-300"
+    />
+    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </div>
+  </div>
+);
+
+useEffect(() => {
+  if (activeTab === 'dashboard' && assignment) {
+    const fetchDashboardData = async () => {
+      setIsLoadingDashboard(true);
+      try {
+        const response = await fetch(
+          `/api/admin/subjectDetailManagement/${subjectid}?action=dashboard-data&assignmentId=${assignment.assignmentid}`
+        );
+        if (!response.ok) throw new Error('Failed to fetch dashboard data');
+        const data = await response.json();
+        setDashboardData(data);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoadingDashboard(false);
+      }
+    };
+
+    fetchDashboardData();
+  }
+}, [activeTab, assignment]);
+
   return (
     
     <Modal
@@ -1139,12 +1326,31 @@ const AssignmentDetailModal = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">กำหนดส่ง</label>
-                  <input
-                    type="date"
-                    value={editForm.assignment_due_date}
-                    onChange={(e) => setEditForm({...editForm, assignment_due_date: e.target.value})}
-                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
+                  <div className="flex gap"> 
+                    <div className="flex-grow">
+                      <DatePicker
+                        selected={new Date(editForm.assignment_due_date)}
+                        onChange={(date) => setEditForm({
+                          ...editForm,
+                          assignment_due_date: date ? date.toISOString().split('T')[0] : ''
+                        })}
+                        dateFormat="MMMM d, yyyy"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                        showMonthDropdown
+                        showYearDropdown
+                        dropdownMode="select"
+                        placeholderText="Select date"
+                      />
+                    </div>
+                    <TimeInput
+                      value={editForm.due_time || "23:59"}
+                      onChange={(e) => setEditForm({
+                        ...editForm,
+                        due_time: e.target.value
+                      })}
+                      className="w-[140px]"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">คำอธิบาย</label>
@@ -1172,7 +1378,7 @@ const AssignmentDetailModal = ({
                           />
                           <label className="ml-3 text-sm font-medium text-gray-700">{docName}</label>
                         </div>
-                        {docValue.checked && (
+                        {/* {docValue.checked && (
                           <div className="ml-7 mt-2 space-y-2">
                             {Object.entries(docValue.details).map(([detailName, checked]) => (
                               <div key={detailName} className="flex items-center">
@@ -1186,7 +1392,7 @@ const AssignmentDetailModal = ({
                               </div>
                             ))}
                           </div>
-                        )}
+                        )} */}
                       </div>
                     ))}
                   </div>
@@ -1196,33 +1402,246 @@ const AssignmentDetailModal = ({
           ) : (
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white rounded-xl border p-6">
-                  <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
-                  <div className="text-3xl font-semibold mt-2">
-                    {assignment?.validates?.length || 0}
-                  </div>
-                </div>
-                <div className="bg-green-50 rounded-xl border border-green-100 p-6">
-                  <div className="text-sm text-green-600">อนุมัติแล้ว</div>
-                  <div className="text-3xl font-semibold text-green-700 mt-2">
-                    {assignment?.validates?.filter(v => v.status === 'approved').length || 0}
-                  </div>
-                </div>
-                <div className="bg-yellow-50 rounded-xl border border-yellow-100 p-6">
-                  <div className="text-sm text-yellow-600">รอดำเนินการ</div>
-                  <div className="text-3xl font-semibold text-yellow-700 mt-2">
-                    {assignment?.validates?.filter(v => v.status === 'pending').length || 0}
-                  </div>
-                </div>
+                {/* <div className="bg-white rounded-xl border p-6"> */}
+                  {/* <div className="text-sm text-gray-500">การส่งทั้งหมด</div> */}
+                  {/* <div className="text-3xl font-semibold mt-2"> */}
+                    {/* {assignment?.validates?.length || 0} */}
+                  {/* </div> */}
+                {/* </div> */}
+                {/* <div className="bg-green-50 rounded-xl border border-green-100 p-6"> */}
+                  {/* <div className="text-sm text-green-600">อนุมัติแล้ว</div> */}
+                  {/* <div className="text-3xl font-semibold text-green-700 mt-2"> */}
+                    {/* {assignment?.validates?.filter(v => v.status === 'approved').length || 0} */}
+                  {/* </div> */}
+                {/* </div> */}
+                {/* <div className="bg-yellow-50 rounded-xl border border-yellow-100 p-6"> */}
+                  {/* <div className="text-sm text-yellow-600">รอดำเนินการ</div> */}
+                  {/* <div className="text-3xl font-semibold text-yellow-700 mt-2"> */}
+                    {/* {assignment?.validates?.filter(v => v.status === 'pending').length || 0} */}
+                  {/* </div> */}
+                {/* </div> */}
               </div>
 
-              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+              {/* <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
-                  {/* ... existing table content ... */}
+                
                 </table>
-              </div>
+              </div> */}
             </div>
           )}
+          {activeTab === 'dashboard' && null}
+          {activeTab === 'dashboard' && (
+  <div className="space-y-8">
+    {isLoadingDashboard ? (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    ) : dashboardData ? (
+      <>
+        {/* Enhanced Statistics Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Submissions Card */}
+          <div className="bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
+                <div className="text-3xl font-semibold mt-2">
+                  {dashboardData?.stats?.timeliness?.onTime + dashboardData?.stats?.timeliness?.late || 0}
+                </div>
+              </div>
+              <div className="rounded-full bg-blue-50 p-3">
+                <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-gray-600">
+              เฉลี่ย {((dashboardData?.stats?.fileSizes?.reduce((acc: number, curr: any) => acc + curr.size, 0) || 0) / 
+              (dashboardData?.stats?.fileSizes?.length || 1)).toFixed(1)} MB ต่อไฟล์
+            </div>
+          </div>
+
+          {/* On-Time Submissions */}
+          <div className="bg-green-50 rounded-xl border border-green-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-green-600">ส่งตรงเวลา</div>
+                <div className="text-3xl font-semibold text-green-700 mt-2">
+                  {dashboardData?.stats?.timeliness?.onTime || 0}
+                </div>
+              </div>
+              <div className="rounded-full bg-green-100 p-3">
+                <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-green-600">
+              {Math.round((dashboardData?.stats?.timeliness?.onTime || 0) / 
+              ((dashboardData?.stats?.timeliness?.onTime || 0) + (dashboardData?.stats?.timeliness?.late || 0)) * 100) || 0}% ของการส่งทั้งหมด
+            </div>
+          </div>
+
+          {/* Late Submissions */}
+          <div className="bg-red-50 rounded-xl border border-red-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-red-600">ส่งช้า</div>
+                <div className="text-3xl font-semibold text-red-700 mt-2">
+                  {dashboardData?.stats?.timeliness?.late || 0}
+                </div>
+              </div>
+              <div className="rounded-full bg-red-100 p-3">
+                <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-red-600">
+              {Math.round((dashboardData?.stats?.timeliness?.late || 0) / 
+              ((dashboardData?.stats?.timeliness?.onTime || 0) + (dashboardData?.stats?.timeliness?.late || 0)) * 100) || 0}% ของการส่งทั้งหมด
+            </div>
+          </div>
+
+          {/* Largest File */}
+          <div className="bg-purple-50 rounded-xl border border-purple-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-purple-600">ไฟล์ใหญ่สุด</div>
+                <div className="text-3xl font-semibold text-purple-700 mt-2">
+                  {dashboardData?.stats?.fileSizes?.[0]?.size.toFixed(1) || 0} MB
+                </div>
+              </div>
+              <div className="rounded-full bg-purple-100 p-3">
+                <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-purple-600 truncate">
+              {dashboardData?.stats?.fileSizes?.[0]?.name || 'ไม่มีการส่งงาน'}
+            </div>
+          </div>
+        </div>
+
+        {/* Submission Timeline */}
+        <div className="bg-white rounded-xl shadow p-6">
+          <h3 className="text-lg font-medium mb-4">ไทม์ไลน์การส่งงาน</h3>
+          <div className="h-80">
+            <Line
+              data={{
+                labels: dashboardData.stats.timeline.dates,
+                datasets: [
+                  {
+                    label: 'ส่งตรงเวลา',
+                    data: dashboardData.stats.timeline.onTime,
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                  },
+                  {
+                    label: 'ส่งช้า',
+                    data: dashboardData.stats.timeline.late,
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                  }
+                ]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top' as const
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      stepSize: 1
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Recent Submissions */}
+        <div className="bg-white rounded-xl shadow p-6">
+          <h3 className="text-lg font-medium mb-4">การส่งงานล่าสุด</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้ส่ง</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กลุ่ม</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาที่ส่ง</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ไฟล์</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {dashboardData.submissions?.map((sub: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {sub.username} {sub.userlastname}
+                        </div>
+                        <div className="text-sm text-gray-500">{sub.email}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {sub.group_name || '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="text-sm text-gray-900">
+                          {new Date(sub.created).toLocaleDateString('th-TH')}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(sub.created).toLocaleTimeString('th-TH')}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                        ${new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'}`}>
+                        {new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
+                          ? 'ตรงเวลา' 
+                          : 'ส่งช้า'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+                          {sub.pdf.file_name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {parseFloat(sub.pdf.file_size).toFixed(1)} MB
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    ) : (
+      <div className="text-center text-gray-500">ไม่พบข้อมูล</div>
+    )}
+  </div>
+)}
+
         </div>
 
         {/* Footer */}
@@ -1694,23 +2113,59 @@ const AssignmentDetailModal = ({
                   </div>
                   <div className="mb-4">
                     <label className="block mb-2 font-medium">วันที่มอบหมาย</label>
-                    <input
-                      type="date"
-                      name="assignment_date"
-                      value={newAssignment.assignment_date}
-                      onChange={(e) => handleAssignmentChange(e)}
-                      className="w-full border p-2 rounded"
-                    />
+                    <div className="flex gap-4">
+                      <div className="flex-grow">
+                        <DatePicker
+                          selected={new Date(newAssignment.assignment_date)}
+                          onChange={(date) => setNewAssignment({
+                            ...newAssignment,
+                            assignment_date: date ? date.toISOString().split('T')[0] : ''
+                          })}
+                          dateFormat="MMMM d, yyyy"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                          showMonthDropdown
+                          showYearDropdown
+                          dropdownMode="select"
+                          placeholderText="Select date"
+                        />
+                      </div>
+                      <TimeInput
+                        value={newAssignment.start_time || "00:00"}
+                        onChange={(e) => setNewAssignment({
+                          ...newAssignment,
+                          start_time: e.target.value
+                        })}
+                        className="w-[140px]"
+                      />
+                    </div>
                   </div>
                   <div className="mb-4">
                     <label className="block mb-2 font-medium">กำหนดส่ง</label>
-                    <input
-                      type="date"
-                      name="assignment_due_date"
-                      value={newAssignment.assignment_due_date}
-                      onChange={(e) => handleAssignmentChange(e)}
-                      className="w-full border p-2 rounded"
-                    />
+                    <div className="flex gap-4">
+                      <div className="flex-grow">
+                        <DatePicker
+                          selected={new Date(newAssignment.assignment_due_date)}
+                          onChange={(date) => setNewAssignment({
+                            ...newAssignment,
+                            assignment_due_date: date ? date.toISOString().split('T')[0] : ''
+                          })}
+                          dateFormat="MMMM d, yyyy"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                          showMonthDropdown
+                          showYearDropdown
+                          dropdownMode="select"
+                          placeholderText="Select date"
+                        />
+                      </div>
+                      <TimeInput
+                        value={newAssignment.due_time || "23:59"}
+                        onChange={(e) => setNewAssignment({
+                          ...newAssignment,
+                          due_time: e.target.value
+                        })}
+                        className="w-[140px]"
+                      />
+                    </div>
                   </div>
                 </div>
 

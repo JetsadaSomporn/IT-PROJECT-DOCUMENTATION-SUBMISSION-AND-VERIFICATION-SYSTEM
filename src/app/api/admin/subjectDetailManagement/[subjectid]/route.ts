@@ -7,6 +7,20 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+interface AssignmentSubmission {
+  assignment_sent_id: number;
+  assignment_id: number;
+  group_id: number;
+  pdf: {
+    file_name: string;
+    file_path: string;
+    file_size: string;
+    uploaded_by: string;
+  };
+  created: string;
+  updated: string;
+  deleted: string | null;
+}
 
 const authenticate = async (request: Request) => {
   console.log('Authenticating request...'); 
@@ -53,6 +67,155 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
       return NextResponse.json(res.rows || [], { 
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    if (action === 'dashboard-data') {
+      try {
+        const assignmentId = url.searchParams.get('assignmentId');
+        if (!assignmentId) {
+          return NextResponse.json({ error: 'Assignment ID required' }, { status: 400 });
+        }
+    
+        // Fetch assignment details first
+        const assignmentResult = await client.query(
+          `SELECT * FROM "Assignment" 
+           WHERE assignmentid = $1 
+           AND subject_available_id = $2 
+           AND deleted IS NULL`,
+          [assignmentId, parsedSubjectId]
+        );
+    
+        if (assignmentResult.rowCount === 0) {
+          return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+        }
+    
+        const assignment = assignmentResult.rows[0];
+        const dueDate = new Date(assignment.assignment_due_date);
+    
+        // Fetch submissions with user details
+        const submissionsQuery = `
+          SELECT 
+            ass.*,
+            u.username,
+            u.userlastname,
+            u.email,
+            g.groupname as group_name,
+            (ass.pdf->>'file_name') as file_name,
+            REPLACE(REPLACE(ass.pdf->>'file_size', 'MB', ''), ' ', '')::numeric as file_size
+          FROM "Assignment_Sent" ass
+          LEFT JOIN "User" u ON u.userid = (ass.pdf->>'uploaded_by')
+          LEFT JOIN "Group" g ON g.groupid = ass.group_id
+          WHERE ass.assignment_id = $1 
+          AND ass.deleted IS NULL
+          ORDER BY ass.created DESC
+        `;
+    
+        const submissionsResult = await client.query(submissionsQuery, [assignmentId]);
+        const submissions = submissionsResult.rows;
+    
+        // Calculate statistics
+        const stats = {
+          timeliness: {
+            onTime: 0,
+            late: 0
+          },
+          fileSizes: [] as { name: string; size: number }[],
+          timeline: {
+            dates: [] as string[],
+            onTime: [] as number[],
+            late: [] as number[]
+          }
+        };
+    
+        let totalFileSize = 0;
+    
+        // Process each submission
+        submissions.forEach(sub => {
+          // Calculate timeliness
+          const submitDate = new Date(sub.created);
+          if (submitDate <= dueDate) {
+            stats.timeliness.onTime++;
+          } else {
+            stats.timeliness.late++;
+          }
+    
+          // Process file size with proper numeric conversion
+          const fileSize = parseFloat(sub.file_size);
+          if (!isNaN(fileSize) && fileSize > 0) {
+            totalFileSize += fileSize;
+            stats.fileSizes.push({
+              name: sub.file_name || 'Unknown file',
+              size: fileSize  // This will be in MB
+            });
+          }
+    
+          // Process timeline data
+          const dateKey = new Date(sub.created).toISOString().split('T')[0];
+          const dateIndex = stats.timeline.dates.indexOf(dateKey);
+          if (dateIndex === -1) {
+            stats.timeline.dates.push(dateKey);
+            stats.timeline.onTime.push(0);
+            stats.timeline.late.push(0);
+            const newIndex = stats.timeline.dates.length - 1;
+            if (submitDate <= dueDate) {
+              stats.timeline.onTime[newIndex]++;
+            } else {
+              stats.timeline.late[newIndex]++;
+            }
+          } else {
+            if (submitDate <= dueDate) {
+              stats.timeline.onTime[dateIndex]++;
+            } else {
+              stats.timeline.late[dateIndex]++;
+            }
+          }
+        });
+    
+       
+        stats.fileSizes.sort((a, b) => b.size - a.size);
+    
+
+        const averageFileSize = submissions.length > 0 ? 
+          totalFileSize / submissions.length : 0;
+    
+    
+        const sortedIndices = stats.timeline.dates
+          .map((date, index) => ({ date, index }))
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map(item => item.index);
+    
+        stats.timeline.dates = sortedIndices.map(i => stats.timeline.dates[i]);
+        stats.timeline.onTime = sortedIndices.map(i => stats.timeline.onTime[i]);
+        stats.timeline.late = sortedIndices.map(i => stats.timeline.late[i]);
+    
+        return NextResponse.json({
+          assignment,
+          stats: {
+            ...stats,
+            totalSubmissions: submissions.length,
+            averageFileSize: totalFileSize / submissions.length || 0,
+            largestFile: stats.fileSizes.length > 0 ? {
+              name: stats.fileSizes[0].name,
+              size: stats.fileSizes[0].size
+            } : null
+          },
+          submissions: submissions.map(sub => ({
+            ...sub,
+            pdf: {
+              file_name: sub.file_name,
+              file_size: sub.file_size,
+              uploaded_by: sub.pdf.uploaded_by
+            }
+          }))
+        });
+    
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        return NextResponse.json({ 
+          error: 'Failed to fetch dashboard data',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
+      }
     }
 
     
