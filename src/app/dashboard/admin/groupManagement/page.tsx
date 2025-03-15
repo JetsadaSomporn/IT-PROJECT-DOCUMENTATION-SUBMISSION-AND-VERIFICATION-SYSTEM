@@ -225,6 +225,97 @@ const GroupEditModal: React.FC<{
   );
 };
 
+const TransferGroupsModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  sourceSubjectId: number;
+  subjects: SubjectData[];
+  onTransfer: (targetSubjectId: number) => Promise<void>;
+}> = ({ isOpen, onClose, sourceSubjectId, subjects, onTransfer }) => {
+  const [targetSubjectId, setTargetSubjectId] = useState<number | ''>('');
+  const [isTransferring, setIsTransferring] = useState(false);
+  
+  const handleTransfer = async () => {
+    if (!targetSubjectId) {
+      alert('Please select a target subject');
+      return;
+    }
+    
+    setIsTransferring(true);
+    try {
+      await onTransfer(Number(targetSubjectId));
+      onClose();
+    } catch (error) {
+      console.error('Transfer failed:', error);
+      alert('Failed to transfer groups. Please try again.');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+  
+  return (
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onClose}
+      className="fixed inset-0 flex items-center justify-center p-4 z-50"
+      overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <h2 className="text-xl font-semibold mb-4">Transfer Groups to Another Subject</h2>
+        <div className="mb-6">
+          <p className="text-gray-600 mb-4">
+            ย้ายกลุ่ม
+          </p>
+          
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Source Subject
+          </label>
+          <div className="p-2 bg-gray-50 border rounded mb-4">
+            {subjects.find(sub => sub.subjectid === sourceSubjectId)?.subject_name || 'Unknown subject'}
+          </div>
+          
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Target Subject
+          </label>
+          <select
+            value={targetSubjectId}
+            onChange={(e) => setTargetSubjectId(e.target.value ? Number(e.target.value) : '')}
+            className="w-full p-2 border rounded mb-2"
+            disabled={isTransferring}
+          >
+            <option value="">Select Target Subject</option>
+            {subjects
+              .filter(subject => subject.subjectid !== sourceSubjectId)
+              .map((subject) => (
+                <option key={subject.subjectid} value={subject.subjectid}>
+                  {subject.subject_name} - Section {subject.section}
+                </option>
+              ))}
+          </select>
+        </div>
+        
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            disabled={isTransferring}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleTransfer}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
+            disabled={!targetSubjectId || isTransferring}
+          >
+            {isTransferring ? 'Transferring...' : 'Transfer Groups'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
 
 type TrackType = 'ALL' | 'BIT' | 'Web&Mobile' | 'Network';
 
@@ -1190,24 +1281,69 @@ const createEmptyGroupSlots = (track: TrackType) => {
   }));
 };
 
+  // Add this state for the transfer modal
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+  // Add this function to handle group transfer
+  const handleTransferGroups = async (targetSubjectId: number) => {
+    if (!selectedSubject) return;
+    
+    try {
+      const response = await fetch('/api/admin/groupManagement', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceSubjectId: selectedSubject,
+          targetSubjectId
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to transfer groups');
+      }
+      
+      alert('Groups transferred successfully!');
+      await fetchGroups(); // Refresh the current view
+    } catch (error) {
+      console.error('Error transferring groups:', error);
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <Header openSidebar={() => setIsSidebarOpen(true)} />
       <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={closeSidebar} />
       <div className="pt-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="py-8">
-          <select
-            value={selectedSubject || ''}
-            onChange={(e) => setSelectedSubject(Number(e.target.value))}
-            className="block w-full p-2 border rounded mb-4"
-          >
-            <option value="">Select Subject</option>
-            {subjects.map((subject) => (
-              <option key={subject.subjectid} value={subject.subjectid}>
-                {subject.subject_name} - Section {subject.section}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between mb-4">
+            <select
+              value={selectedSubject || ''}
+              onChange={(e) => setSelectedSubject(Number(e.target.value))}
+              className="block w-full md:w-2/3 p-2 border rounded"
+            >
+              <option value="">Select Subject</option>
+              {subjects.map((subject) => (
+                <option key={subject.subjectid} value={subject.subjectid}>
+                  {subject.subject_name} - Section {subject.section}
+                </option>
+              ))}
+            </select>
+            
+            {selectedSubject && (
+              <button
+                onClick={() => setIsTransferModalOpen(true)}
+                className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Transfer Groups
+              </button>
+            )}
+          </div>
 
           {selectedSubject && showTrackInfo()}
         </div>
@@ -1218,6 +1354,25 @@ const createEmptyGroupSlots = (track: TrackType) => {
         filteredGroups={filteredGroups}
         groups={groups}
       />
+
+      {/* Add the transfer modal */}
+      <TransferGroupsModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        sourceSubjectId={selectedSubject || 0}
+        subjects={subjects}
+        onTransfer={handleTransferGroups}
+      />
+
+      {/* Existing modal */}
+      {editingGroup && (
+        <GroupEditModal
+          isOpen={!!editingGroup}
+          onClose={() => setEditingGroup(null)}
+          group={editingGroup}
+          onSave={handleEditGroup}
+        />
+      )}
     </div>
   );
 }

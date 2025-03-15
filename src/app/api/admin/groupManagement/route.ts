@@ -316,3 +316,75 @@ export async function PUT(request: Request) {
     client.release();
   }
 }
+
+// Add PATCH method for transferring groups between subjects
+export async function PATCH(request: Request) {
+  const { sourceSubjectId, targetSubjectId } = await request.json();
+  
+  if (!sourceSubjectId || !targetSubjectId) {
+    return NextResponse.json({ error: 'Source and target subject IDs are required' }, { status: 400 });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Get all groups from source subject
+    const getGroupsQuery = `
+      SELECT groupid, projectname, groupname, "User", teacher, note
+      FROM "Group"
+      WHERE subject = $1 AND deleted IS NULL
+    `;
+    const groupsResult = await client.query(getGroupsQuery, [sourceSubjectId]);
+    
+    // For each group, create a new one in the target subject
+    for (const group of groupsResult.rows) {
+      // Check if group with same name already exists in target subject
+      const checkExistingQuery = `
+        SELECT groupid 
+        FROM "Group" 
+        WHERE subject = $1 AND groupname = $2 AND deleted IS NULL
+      `;
+      const existingResult = await client.query(checkExistingQuery, [targetSubjectId, group.groupname]);
+      
+      if (existingResult.rows.length > 0) {
+        // Update existing group
+        await client.query(
+          `UPDATE "Group"
+           SET "User" = $1::character varying[],
+               teacher = $2::character varying[],
+               note = $3,
+               projectname = $4,
+               updated = CURRENT_TIMESTAMP
+           WHERE groupid = $5`,
+          [group.User, group.teacher, group.note, group.projectname, existingResult.rows[0].groupid]
+        );
+      } else {
+        // Create new group
+        await client.query(
+          `INSERT INTO "Group" (
+            groupname, 
+            subject, 
+            "User", 
+            teacher, 
+            note,
+            projectname
+          ) VALUES ($1, $2, $3::character varying[], $4::character varying[], $5, $6)`,
+          [group.groupname, targetSubjectId, group.User, group.teacher, group.note, group.projectname]
+        );
+      }
+    }
+    
+    await client.query('COMMIT');
+    return NextResponse.json({ 
+      success: true, 
+      message: `Successfully transferred ${groupsResult.rows.length} groups from subject ${sourceSubjectId} to subject ${targetSubjectId}`
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error transferring groups:', error);
+    return NextResponse.json({ error: 'Failed to transfer groups' }, { status: 500 });
+  } finally {
+    client.release();
+  }
+}

@@ -23,48 +23,50 @@ interface AssignmentSubmission {
 }
 
 const authenticate = async (request: Request) => {
-  console.log('Authenticating request...'); 
   const session = await getServerSession(authOptions);
-  console.log('Session:', session);
   if (!session) {
-    console.log('No session found. Unauthorized access.');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  console.log('test edit subj.');
   
-  console.log('session authenticated. edit test ');
   return null;
 };
 
 export async function GET(request: Request, { params }: { params: { subjectid: string } }) {
   const client = await pool.connect();
   try {
-    console.log('\n=== GET Request Started ===');
     const { subjectid } = await params;
-    console.log('Fetching subject:', subjectid);
 
     const authResponse = await authenticate(request);
     if (authResponse) return authResponse;
 
     const parsedSubjectId = Number(subjectid);
     if (isNaN(parsedSubjectId)) {
-      console.log('Invalid subject ID');
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+      return NextResponse.json({ error: 'รหัสวิชาไม่ถูกต้อง' }, { status: 400 });
     }
 
     const url = new URL(request.url);
-    console.log('Full request URL:', url.toString());
     const action = url.searchParams.get('action') || 'fetch-subject';
-    console.log('Action:', action);
 
     if (action === 'all-assignments') {
-      console.log('Fetching assignments for subject:', parsedSubjectId);
       const res = await client.query(
         'SELECT * FROM "Assignment" WHERE subject_available_id = $1 AND deleted IS NULL ORDER BY created DESC',
         [parsedSubjectId]
       );
+
+      // Process the results to include the full timestamp from validates
+      const assignments = res.rows.map(assignment => {
+        // Check if validates contains the full due date time
+        if (assignment.validates && assignment.validates.length > 0) {
+          const validate = assignment.validates[0];
+          if (validate.fullDueDateTime) {
+            // Use the full timestamp from validates
+            assignment.assignment_due_date_with_time = validate.fullDueDateTime;
+          }
+        }
+        return assignment;
+      });
     
-      return NextResponse.json(res.rows || [], { 
+      return NextResponse.json(assignments || [], { 
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -73,10 +75,9 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
       try {
         const assignmentId = url.searchParams.get('assignmentId');
         if (!assignmentId) {
-          return NextResponse.json({ error: 'Assignment ID required' }, { status: 400 });
+          return NextResponse.json({ error: 'รหัสงานไม่ถูกต้อง' }, { status: 400 });
         }
     
-        // Fetch assignment details first
         const assignmentResult = await client.query(
           `SELECT * FROM "Assignment" 
            WHERE assignmentid = $1 
@@ -86,13 +87,60 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         );
     
         if (assignmentResult.rowCount === 0) {
-          return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+          return NextResponse.json({ error: 'ไม่พบข้อมูลงาน' }, { status: 404 });
         }
     
         const assignment = assignmentResult.rows[0];
-        const dueDate = new Date(assignment.assignment_due_date);
+        
+        // First, get valid groups for this subject
+        const groupsQuery = `
+          SELECT g.groupid, g.groupname, g."User", g.projectname
+          FROM "Group" g
+          WHERE g.subject = $1 AND g.deleted IS NULL AND g."User" IS NOT NULL AND array_length(g."User", 1) > 0
+        `;
+        const groupsResult = await client.query(groupsQuery, [parsedSubjectId]);
+        
+        // Get total count of valid groups
+        const totalValidGroups = groupsResult.rows.length;
+        
+        // Get list of group IDs that have submitted
+        const submittedGroupsQuery = `
+          SELECT DISTINCT group_id
+          FROM "Assignment_Sent"
+          WHERE assignment_id = $1 AND deleted IS NULL
+        `;
+        const submittedGroupsResult = await client.query(submittedGroupsQuery, [assignmentId]);
+        const submittedGroupIds = submittedGroupsResult.rows.map(row => row.group_id);
+        
+        // Get all submitted groups with details
+        const submittedGroupsDetailsQuery = `
+          SELECT g.groupid, g.groupname, g.projectname
+          FROM "Group" g
+          WHERE g.groupid = ANY($1) AND g.deleted IS NULL
+        `;
+        const submittedGroupsDetailsResult = await client.query(
+          submittedGroupsDetailsQuery,
+          [submittedGroupIds]
+        );
+        
+        const submittedGroupsDetails = submittedGroupsDetailsResult.rows;
+        
+        // Count submitted groups and calculate not submitted
+        const submittedCount = submittedGroupIds.length;
+        const notSubmittedCount = Math.max(0, totalValidGroups - submittedCount);
+        
+        // Process the due date for comparing submission times
+        let dueDate;
+        if (assignment.validates && 
+            Array.isArray(assignment.validates) && 
+            assignment.validates.length > 0 && 
+            assignment.validates[0].fullDueDateTime) {
+          dueDate = new Date(assignment.validates[0].fullDueDateTime);
+        } else {
+          dueDate = new Date(assignment.assignment_due_date);
+        }
     
-        // Fetch submissions with user details
+        // Get submission details for all submitted assignments with expanded details
         const submissionsQuery = `
           SELECT 
             ass.*,
@@ -100,8 +148,17 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
             u.userlastname,
             u.email,
             g.groupname as group_name,
+            g.projectname,
             (ass.pdf->>'file_name') as file_name,
-            REPLACE(REPLACE(ass.pdf->>'file_size', 'MB', ''), ' ', '')::numeric as file_size
+            (ass.pdf->>'file_path') as file_path,
+            CASE
+              WHEN ass.pdf->>'file_size' ~ '^[0-9]+(\.[0-9]+)?$' THEN (ass.pdf->>'file_size')::numeric
+              WHEN ass.pdf->>'file_size' ~ '.*MB.*' THEN REPLACE(REPLACE(ass.pdf->>'file_size', 'MB', ''), ' ', '')::numeric
+              ELSE 0
+            END as file_size,
+            (SELECT array_agg(u2.username || ' ' || u2.userlastname)
+             FROM "User" u2
+             WHERE u2.userid = ANY(g."User")) as group_members
           FROM "Assignment_Sent" ass
           LEFT JOIN "User" u ON u.userid = (ass.pdf->>'uploaded_by')
           LEFT JOIN "Group" g ON g.groupid = ass.group_id
@@ -111,74 +168,164 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         `;
     
         const submissionsResult = await client.query(submissionsQuery, [assignmentId]);
-        const submissions = submissionsResult.rows;
+        const submissions = submissionsResult?.rowCount && submissionsResult.rowCount > 0 ? submissionsResult.rows : [];
     
-        // Calculate statistics
+        // Get not submitted groups details
+        const notSubmittedGroups = groupsResult.rows
+          .filter(group => !submittedGroupIds.includes(group.groupid))
+          .map(group => ({
+            groupid: group.groupid,
+            groupname: group.groupname,
+            projectname: group.projectname
+          }));
+    
+        // Calculate statistics by group instead of by individual submission
         const stats = {
           timeliness: {
             onTime: 0,
             late: 0
           },
           fileSizes: [] as { name: string; size: number }[],
+          fileTypes: {} as { [key: string]: number },
           timeline: {
             dates: [] as string[],
             onTime: [] as number[],
             late: [] as number[]
-          }
+          },
+          hourlyDistribution: Array(24).fill(0),
+          dayOfWeekDistribution: Array(7).fill(0),
+          verificationResults: {
+            totalChecks: 0,
+            passedChecks: 0,
+            documents: {} as { [key: string]: { checked: number, total: number } }
+          },
+          submissionTimeGap: [] as number[],
+          totalGroups: totalValidGroups,
+          submittedGroups: submittedCount,
+          notSubmittedGroups: notSubmittedCount,
+          submissionRate: submittedCount / totalValidGroups || 0,
+          averageSubmissionHours: 0
         };
     
-        let totalFileSize = 0;
-    
-        // Process each submission
+        // Track the earliest submission for each group
+        const groupSubmissionMap: { [groupId: string]: { date: Date, isOnTime: boolean } } = {};
+        
+        // Process each submission to track by group and collect additional stats
         submissions.forEach(sub => {
-          // Calculate timeliness
+          const groupId = sub.group_id;
           const submitDate = new Date(sub.created);
-          if (submitDate <= dueDate) {
-            stats.timeliness.onTime++;
-          } else {
-            stats.timeliness.late++;
-          }
-    
-          // Process file size with proper numeric conversion
+          const isOnTime = submitDate <= dueDate;
+          
+          // Track file sizes for all submissions
           const fileSize = parseFloat(sub.file_size);
           if (!isNaN(fileSize) && fileSize > 0) {
-            totalFileSize += fileSize;
             stats.fileSizes.push({
               name: sub.file_name || 'Unknown file',
-              size: fileSize  // This will be in MB
+              size: fileSize
             });
           }
     
-          // Process timeline data
-          const dateKey = new Date(sub.created).toISOString().split('T')[0];
+          // Track file types
+          if (sub.file_name) {
+            const fileExt = sub.file_name.split('.').pop()?.toLowerCase() || 'unknown';
+            stats.fileTypes[fileExt] = (stats.fileTypes[fileExt] || 0) + 1;
+          }
+    
+          // Track hourly submission distribution
+          stats.hourlyDistribution[submitDate.getHours()]++;
+          
+          // Track day of week submission distribution (0 = Sunday, 6 = Saturday)
+          stats.dayOfWeekDistribution[submitDate.getDay()]++;
+    
+          // Calculate submission gap (hours between assignment due and submission)
+          const creationDate = new Date(assignment.created);
+          const gapHours = Math.round((submitDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60));
+          if (gapHours >= 0) {
+            stats.submissionTimeGap.push(gapHours);
+          }
+    
+          // For timeline tracking, add each submission to its date bucket
+          const dateKey = submitDate.toISOString().split('T')[0];
           const dateIndex = stats.timeline.dates.indexOf(dateKey);
           if (dateIndex === -1) {
             stats.timeline.dates.push(dateKey);
             stats.timeline.onTime.push(0);
             stats.timeline.late.push(0);
             const newIndex = stats.timeline.dates.length - 1;
-            if (submitDate <= dueDate) {
+            if (isOnTime) {
               stats.timeline.onTime[newIndex]++;
             } else {
               stats.timeline.late[newIndex]++;
             }
           } else {
-            if (submitDate <= dueDate) {
+            if (isOnTime) {
               stats.timeline.onTime[dateIndex]++;
             } else {
               stats.timeline.late[dateIndex]++;
             }
           }
+    
+          // Process verification results if available
+          if (sub.verification_results) {
+            try {
+              const results = typeof sub.verification_results === 'string' 
+                ? JSON.parse(sub.verification_results) 
+                : sub.verification_results;
+              
+              if (results && typeof results === 'object') {
+                for (const [docName, checks] of Object.entries(results)) {
+                  if (!stats.verificationResults.documents[docName]) {
+                    stats.verificationResults.documents[docName] = { checked: 0, total: 0 };
+                  }
+                  
+                  if (typeof checks === 'object' && checks !== null) {
+                    const checkResults = checks as { passed?: boolean, failed?: boolean };
+                    stats.verificationResults.totalChecks++;
+                    if (checkResults.passed) {
+                      stats.verificationResults.passedChecks++;
+                      stats.verificationResults.documents[docName].checked++;
+                    }
+                    stats.verificationResults.documents[docName].total++;
+                  }
+                }
+              }
+            } catch (e) {
+              // Silent error
+            }
+          }
+    
+          // Track the earliest submission for each group
+          if (!groupSubmissionMap[groupId] || submitDate < groupSubmissionMap[groupId].date) {
+            groupSubmissionMap[groupId] = { date: submitDate, isOnTime };
+          }
         });
     
-       
+        // Now count timeliness based on the earliest submission for each group
+        Object.values(groupSubmissionMap).forEach(submission => {
+          if (submission.isOnTime) {
+            stats.timeliness.onTime++;
+          } else {
+            stats.timeliness.late++;
+          }
+        });
+    
+        // Calculate average submission time gap
+        stats.averageSubmissionHours = stats.submissionTimeGap.length > 0
+          ? stats.submissionTimeGap.reduce((sum, gap) => sum + gap, 0) / stats.submissionTimeGap.length
+          : 0;
+    
+        // Adjust timeliness counts if needed
+        if (stats.timeliness.onTime + stats.timeliness.late !== submittedCount) {
+          if (stats.timeliness.onTime + stats.timeliness.late > submittedCount) {
+            // Too many counted - prioritize preserving on-time count
+            stats.timeliness.late = Math.max(0, submittedCount - stats.timeliness.onTime);
+          }
+        }
+    
+        // Sort file sizes by size (descending)
         stats.fileSizes.sort((a, b) => b.size - a.size);
     
-
-        const averageFileSize = submissions.length > 0 ? 
-          totalFileSize / submissions.length : 0;
-    
-    
+        // Sort timeline dates
         const sortedIndices = stats.timeline.dates
           .map((date, index) => ({ date, index }))
           .sort((a, b) => a.date.localeCompare(b.date))
@@ -190,34 +337,27 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
     
         return NextResponse.json({
           assignment,
-          stats: {
-            ...stats,
-            totalSubmissions: submissions.length,
-            averageFileSize: totalFileSize / submissions.length || 0,
-            largestFile: stats.fileSizes.length > 0 ? {
-              name: stats.fileSizes[0].name,
-              size: stats.fileSizes[0].size
-            } : null
-          },
+          stats,
           submissions: submissions.map(sub => ({
             ...sub,
             pdf: {
               file_name: sub.file_name,
+              file_path: sub.file_path,
               file_size: sub.file_size,
               uploaded_by: sub.pdf.uploaded_by
             }
-          }))
+          })),
+          submittedGroups: submittedGroupsDetails,
+          notSubmittedGroups
         });
     
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
         return NextResponse.json({ 
-          error: 'Failed to fetch dashboard data',
-          details: error instanceof Error ? error.message : 'Unknown error'
+          error: 'กำลังดึงข้อมูลแดชบอร์ดล้มเหลว',
+          details: error instanceof Error ? error.message : 'ข้อผิดพลาดที่ไม่รู้จัก'
         }, { status: 500 });
       }
     }
-
     
     if (action === "all-users") {
       const result = await client.query(
@@ -226,27 +366,69 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
       return NextResponse.json(result.rows);
     }
 
+    if (action === 'submission-stats') {
+      const assignmentId = url.searchParams.get('assignmentId');
+      
+      if (!assignmentId) {
+        return NextResponse.json({ error: 'รหัสงานไม่ถูกต้อง' }, { status: 400 });
+      }
+  
+      try {
+        const client = await pool.connect();
+        
+        try {
+          const groupsQuery = `
+            SELECT g.groupid, g.groupname, g."User"
+            FROM "Group" g
+            WHERE g.subject = $1 AND g.deleted IS NULL AND g."User" IS NOT NULL AND array_length(g."User", 1) > 0
+          `;
+          const groupsResult = await client.query(groupsQuery, [subjectid]);
+          
+          const submissionsQuery = `
+            SELECT DISTINCT group_id  
+            FROM "Assignment_Sent"
+            WHERE assignment_id = $1 AND deleted IS NULL
+          `;
+          const submissionsResult = await client.query(submissionsQuery, [assignmentId]);
+          
+          const submittedGroupIds = submissionsResult.rows.map(row => row.group_id);
+          
+          const totalGroups = groupsResult.rows.length;
+          const submittedGroups = submittedGroupIds.length;
+          const notSubmittedGroups = Math.max(0, totalGroups - submittedGroups);
+          
+          const result = {
+            totalGroups: totalGroups,
+            submittedGroups: submittedGroupIds,
+            notSubmittedCount: notSubmittedGroups
+          };
+          
+          return NextResponse.json(result);
+        } finally {
+          client.release();
+        }
+      } catch (error) {
+        return NextResponse.json(
+          { error: 'กำลังดึงสถิติการส่งงานล้มเหลว' },
+          { status: 500 }
+        );
+      }
+    }
+
     try {
-      // Get subject details
-      console.log('\n=== Fetching Subject Data ===');
       const subjectResult = await client.query(
         `SELECT * FROM "Subject_Available" 
          WHERE subjectid = $1 AND deleted IS NULL`,
         [parsedSubjectId]
       );
-      console.log('Subject query result:', subjectResult.rows[0]);
 
       if (subjectResult.rowCount === 0) {
-        console.log('Subject not found');
-        return NextResponse.json({ error: 'Subject not found' }, { status: 404 });
+        return NextResponse.json({ error: 'ไม่พบวิชา' }, { status: 404 });
       }
 
       const subject = subjectResult.rows[0];
 
-      // Get teacher details
-      console.log('\n=== Fetching Teacher Data ===');
       if (subject.teachers && subject.teachers.length > 0) {
-        console.log('Teacher IDs:', subject.teachers);
         const teacherResult = await client.query(
           `SELECT userid, username, userlastname, email, type 
            FROM "User" 
@@ -254,14 +436,10 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
            AND deleted IS NULL`,
           [subject.teachers]
         );
-        console.log('Teacher details:', teacherResult.rows);
         subject.teachers = teacherResult.rows;
       }
 
-      // Get student details
-      console.log('\n=== Fetching Student Data ===');
       if (subject.students && subject.students.length > 0) {
-        console.log('Student IDs:', subject.students);
         const studentResult = await client.query(
           `SELECT userid as student_id, username, userlastname, email 
            FROM "User" 
@@ -269,22 +447,16 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
            AND deleted IS NULL`,
           [subject.students]
         );
-        console.log('Student details:', studentResult.rows);
         subject.students = studentResult.rows;
       }
-
-      console.log('\n=== Final Subject Data ===');
-      console.log(JSON.stringify(subject, null, 2));
 
       return NextResponse.json(subject, { status: 200 });
 
     } catch (err) {
-      console.error('Database error:', err);
       throw err;
     }
 
   } catch (err) {
-    console.error('GET handler error:', err);
     // Return empty array on error for assignments
     const errorUrl = new URL(request.url);
     if (errorUrl.searchParams.get('action') === 'all-assignments') {
@@ -293,8 +465,8 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
       });
     }
     return NextResponse.json({ 
-      error: 'Server Error',
-      details: err instanceof Error ? err.message : 'Unknown error'
+      error: 'เซิร์ฟเวอร์ผิดพลาด',
+      details: err instanceof Error ? err.message : 'ข้อผิดพลาดที่ไม่รู้จัก'
     }, { status: 500 });
   } finally {
     client.release();
@@ -319,12 +491,9 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
     const action = url.searchParams.get('action') || 'fetch-subject';
 
     if (action === 'manage-teacher') {
-      console.log('Managing teachers - Start');
       
       const requestBody = await request.json();
       const { teachers } = requestBody;
-      
-      console.log('Received teachers for update:', teachers);
     
       try {
         await client.query('BEGIN');
@@ -350,10 +519,8 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
     
         // Convert teacher IDs to JSONB array
         const teacherIds = JSON.stringify(teachers);
-        console.log('Teacher IDs being saved:', teacherIds);
     
         const result = await client.query(updateQuery, [teacherIds, parsedSubjectId]);
-        console.log('Update result:', result.rows[0]);
     
         if (result.rowCount === 0) {
           await client.query('ROLLBACK');
@@ -367,8 +534,6 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           teachers: teacherDetails.rows // Include full teacher details in response
         };
     
-        console.log('Final response with teachers:', response);
-    
         return NextResponse.json({
           message: 'Teachers updated successfully',
           data: response
@@ -376,33 +541,24 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
     
       } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error updating teachers:', error);
         throw error;
       }
     }
 
     if (action === 'edit-subject') {
-      // console.log('1. PUT handler started');
-      // console.log('2. Subject ID:', subjectid);
 
       const authResponse = await authenticate(request);
-      // console.log('3. Auth response:', authResponse);
       
       if (authResponse) {
-      // console.log('4. Exiting due to auth response');
       return authResponse;
       }
 
-      // console.log('5. Parsing request body');
       const parsedSubjectId = Number(subjectid);
       
       if (isNaN(parsedSubjectId)) {
-      // console.log('6. Invalid subject ID');
       return NextResponse.json({ error: 'invalit subject ID' }, { status: 400 });
       }
-      // console.log('7. About to parse request body');
       const requestBody = await request.json();
-      // console.log('8. Request body:', requestBody);
 
       // trim and validate value
       const subjectName = (requestBody.subject_name ?? '').toString().trim();
@@ -411,23 +567,14 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
       const sectionValue = (requestBody.section ?? '').toString().trim();
       const groupData = requestBody.group_data ?? {};
 
-      // console.log('9. Parsed values:', {
-      // subjectName,
-      // subjectSemester,
-      // subjectYear,
-      // sectionValue,
-      // groupData
-      // });
 
       if (!subjectName || !subjectSemester || !subjectYear || !sectionValue) {
-      // console.log('10. Validation failed');
       return NextResponse.json({ 
         error: 'missing required fields',
         details: { subjectName, subjectSemester, subjectYear, sectionValue }
       }, { status: 400 });
       }
 
-      // console.log('11. Getting database connection');
       const client = await pool.connect();
       
       try {
@@ -512,7 +659,6 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
         
       } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error('error updating subject:', error);
         return NextResponse.json({ 
           error: 'Failed to update subject',
           details: error.message 
@@ -522,12 +668,12 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
       }
     }
 
+    // แก้ไขฟังก์ชันในส่วนที่บันทึกเวลาลงฐานข้อมูล
     if (action === 'update-assignment') {
       const client = await pool.connect();
       try {
         const requestBody = await request.json();
-        console.log('get val assign data:', requestBody);
-
+  
         const { 
           assignmentid, 
           assignment_name, 
@@ -536,20 +682,32 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           assignment_due_date, 
           validates 
         } = requestBody;
-
-        // Match the same format as create assignment
-        const validateItem = {
-          type: 'verification_requirements',
-          requirements: validates[0]?.requirements || {}
-        };
-
+  
+        // Store the full timestamp in the validates array with proper error handling
+        let validateItem;
+        if (validates && Array.isArray(validates) && validates.length > 0) {
+          validateItem = {
+            ...validates[0],
+            fullDueDateTime: assignment_due_date // Store the full ISO timestamp with timezone
+          };
+        } else {
+          validateItem = {
+            type: 'verification_requirements',
+            requirements: requestBody.doc_verification || {},
+            fullDueDateTime: assignment_due_date // Store the full ISO timestamp with timezone
+          };
+        }
+        
+        // Set timezone to correctly handle timestamps
+        await client.query("SET timezone = 'Asia/Bangkok'");
+        
         const updateQuery = `
           UPDATE "Assignment"
           SET 
             assignment_name = $1,
             assignment_description = $2,
             assignment_date = $3::date,
-            assignment_due_date = $4::date,
+            assignment_due_date = $4::timestamp with time zone,
             validates = ARRAY[$5::json],
             updated = CURRENT_TIMESTAMP
           WHERE assignmentid = $6 
@@ -557,53 +715,52 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           AND deleted IS NULL
           RETURNING *;
         `;
-
+        
         const values = [
           assignment_name,
           assignment_description || '',
           assignment_date,
-          assignment_due_date,
+          assignment_due_date, // Use the ISO string with timezone info
           JSON.stringify(validateItem),
           assignmentid,
           parsedSubjectId
         ];
-
+  
+  
         const result = await client.query(updateQuery, values);
-        console.log('Update result:', result.rows[0]);
-
+  
         if (result.rowCount === 0) {
           await client.query('ROLLBACK');
-          return NextResponse.json({ error: 'failed to update assignment' }, { status: 404 });
+          return NextResponse.json({ error: 'Failed to update assignment' }, { status: 404 });
         }
-
+  
         await client.query('COMMIT');
-
-        
+  
+        // Return the assignment with the proper fullDueDateTime
         const updatedAssignment = {
           ...result.rows[0],
           doc_verification: result.rows[0].validates?.[0]?.requirements || {}
         };
-
+  
         return NextResponse.json({
           message: 'Assignment updated successfully',
           data: updatedAssignment
         });
-
+  
       } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error('database error:', error);
         return NextResponse.json({ 
-          error: 'failed to update assignment',
+          error: 'Failed to update assignment',
           details: error.message 
         }, { status: 500 });
       } finally {
         client.release();
       }
     }
+
     return NextResponse.json({ error: 'no matching action provided' }, { status: 400 });
 
   } catch (err: any) {
-    console.error('Error in PUT handler:', err);
     return NextResponse.json({ 
       error: 'error updating subject',
       details: err.message 
@@ -621,14 +778,12 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
     const parsedSubjectId = Number(subjectid);
 
     if (isNaN(parsedSubjectId)) {
-      // console.log('Invalid subject ID');
       return NextResponse.json({ error: 'Invalid subject ID' }, { status: 400 });
     }
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'fetch-subject';
     if (!action) {
-      console.log('No action param found, returning error.');
       return NextResponse.json({ error: 'Missing action param' }, { status: 400 });
     }
     const client = await pool.connect();
@@ -649,7 +804,6 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
         return NextResponse.json({ error: 'Subject not found or already deleted' }, { status: 404 });
         }
 
-        // console.log(`subject with ID ${parsedSubjectId} removed successfully`);
         return NextResponse.json({
         message: 'Subject removed successfully',
         data: result.rows[0]
@@ -660,7 +814,6 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
         const { student_id } = await request.json();
 
         if (!student_id) {
-          console.log('student_id is missing in the request body.');
           return NextResponse.json({ error: 'student_id is required' }, { status: 400 });
         }
 
@@ -694,13 +847,11 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
             throw new Error('Failed to update subject');
           }
 
-          // console.log(`student with ID ${student_id} removed from subject ${parsedSubjectId}`);
           return NextResponse.json({ 
             message: 'Student removed successfully',
             data: result.rows[0]
           }, { status: 200 });
         } catch (error) {
-          console.error('Error removing student:', error);
           throw error;
         }
       }
@@ -738,17 +889,14 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
           WHERE subjectid = $1 AND deleted IS NULL 
           RETURNING *`;
         
-        // console.log('Executing delete query for subject:', parsedSubjectId);
         const result = await client.query(deleteQuery, [parsedSubjectId]);
 
         if (result.rowCount === 0) {
-          console.log('Subject not found or already deleted');
           return NextResponse.json({ 
             error: 'Subject not found or already deleted' 
           }, { status: 404 });
         }
 
-        // console.log('Subject deleted successfully:', result.rows[0]);
         return NextResponse.json({
           success: true,
           message: 'Subject deleted successfully',
@@ -759,7 +907,6 @@ export async function DELETE(request: Request, { params }: { params: { subjectid
       return NextResponse.json({ error: 'Invalid action parameter' }, { status: 400 });
 
     } catch (error: any) {
-      // console.error('Error in DELETE operation:', error);
       return NextResponse.json({ 
         error: 'Delete operation failed',
         details: error instanceof Error ? error.message : 'Unknown error'
@@ -780,23 +927,19 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
     const parsedSubjectId = Number(subjectid);
 
     if (isNaN(parsedSubjectId)) {
-      // console.log('Invalid subject ID');
       return NextResponse.json({ error: 'Invalid subject ID' }, { status: 400 });
     }
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'fetch-subject';
     if (!action) {
-      console.log('No action param found, returning error.');
       return NextResponse.json({ error: 'Missing action param' }, { status: 400 });
     }
 
-    // console.log('Action:', action);
 
     try {
       if (action === 'students') {
         const { students } = await request.json();
-        // console.log('Received students:', students);
 
         if (!Array.isArray(students)) {
           return NextResponse.json({ error: 'Invalid students data format' }, { status: 400 });
@@ -821,15 +964,12 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
 
           for (const student of students) {
             const { student_id, username, userlastname, email } = student;
-            // console.log('Processing student:', student);
             
             // Validate student_id
             if (!student_id || typeof student_id !== 'string') {
-              console.warn('Invalid or missing student_id for student:', student);
               continue; 
             }
             if (!username || !userlastname || !email) {
-              console.warn('Incomplete student data:', student);
               continue; 
             }
 
@@ -864,7 +1004,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
           return NextResponse.json({ message: 'Students imported successfully' }, { status: 200 });
         } catch (err: any) {
           await client.query('ROLLBACK');
-          // console.error('Error saving students:', err);
           return NextResponse.json({ error: 'Failed to save students', details: err.message }, { status: 500 });
         } finally {
           client.release();
@@ -891,8 +1030,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
 
       if (action === 'all-assignments') {
         try {
-          console.log('\n=== Fetching Assignments ===');
-          console.log('Subject ID:', parsedSubjectId);
           
           const assignmentsQuery = `
             SELECT * FROM "Assignment" 
@@ -902,26 +1039,21 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
           `;
           
           const result = await client.query(assignmentsQuery, [parsedSubjectId]);
-          console.log('Assignments query result:', result.rows);
   
           if (result.rowCount === 0) {
-            console.log('No assignments found');
             return NextResponse.json([], { status: 200 });
           }
   
           const assignments = result.rows;
-          console.log('Returning assignments:', assignments);
           return NextResponse.json(assignments, { status: 200 });
   
         } catch (error) {
-          console.error('Error fetching assignments:', error);
           throw error;
         }
       }
 
       if (action === 'teachers') {
         const { teachers } = await request.json();
-        // console.log('Received teachers:', teachers);
 
         if (!Array.isArray(teachers) || teachers.some((id: any) => typeof id !== 'string')) {
           return NextResponse.json({ error: 'Invalid teachers data format' }, { status: 400 });
@@ -946,7 +1078,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
         const teachersJson = JSON.stringify(validTeacherIds);
 
         const result = await pool.query(updateQuery, [teachersJson, parsedSubjectId]);
-        // console.log('Subject updated with teacher IDs:', validTeacherIds);
 
         if (result.rowCount === 0) {
           return NextResponse.json({ error: 'Subject not found' }, { status: 404 });
@@ -961,6 +1092,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
         });
       }
 
+      // อัปเดต action create-assignment เช่นกัน
       if (action === 'create-assignment') {
         try {
           const {
@@ -970,58 +1102,65 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
             assignment_due_date,
             documentVerification
           } = await request.json();
-      
+        
           if (!assignment_name || !assignment_date || !assignment_due_date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
           }
-      
+        
           const client = await pool.connect();
           try {
             await client.query('BEGIN');
-      
+        
+            // Parse the full date string to preserve time components
+            const dueDate = new Date(assignment_due_date);
+        
             const validateItem = {
               type: 'verification_requirements',
-              requirements: documentVerification
+              requirements: documentVerification,
+              fullDueDateTime: assignment_due_date // Store the full timestamp with timezone
             };
-      
+        
+            // Set the PostgreSQL session timezone to Thailand for consistent handling
+            await client.query("SET timezone = 'Asia/Bangkok'");
+            
             const insertQuery = `
               INSERT INTO "Assignment" (
                 subject_available_id,
                 assignment_name,
                 assignment_description,
                 assignment_date,
-                assignment_due_date,
+                assignment_due_date, -- This should accept timestamp now
                 validates,
                 created,
                 updated
               )
-              VALUES ($1, $2, $3, $4, $5, ARRAY[$6::json], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              VALUES ($1, $2, $3, $4::date, $5, ARRAY[$6::json], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
               RETURNING *;
             `;
-      
+        
             const values = [
               parsedSubjectId,
               assignment_name,
               assignment_description || '',
               assignment_date,
-              assignment_due_date,
+              assignment_due_date, // Use the full ISO timestamp with timezone
               JSON.stringify(validateItem)
             ];
-      
+        
             const result = await client.query(insertQuery, values);
             await client.query('COMMIT');
-      
         
+          
             const newAssignment = {
               ...result.rows[0],
               doc_verification: result.rows[0].validates?.[0]?.requirements || {}
             };
-      
+        
             return NextResponse.json({
               message: 'Assignment created successfully',
               data: newAssignment
             });
-      
+        
           } catch (error: any) {
             await client.query('ROLLBACK');
             throw error;
@@ -1029,7 +1168,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
             client.release();
           }
         } catch (error: any) {
-          console.error('error creating assignment:', error);
           return NextResponse.json({ 
             error: 'Failed to create assignment',
             details: error.message 
@@ -1108,7 +1246,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
     
           return NextResponse.json(updated.rows[0], { status: 200 });
         } catch (err: any) {
-          console.error('error inserting teachers as JSON:', err);
           return NextResponse.json({ error: err.message }, { status: 500 });
         }
       }
@@ -1116,7 +1253,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
       if (action === 'update-assignment') {
         try {
           const requestBody = await request.json();
-          console.log('received val:', requestBody);
       
           const { 
             assignmentid, 
@@ -1143,13 +1279,20 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               requirements: doc_verification
             };
       
+            // Ensure we're working with a proper ISO format date string
+            const dueDate = new Date(assignment_due_date);
+
+            // First, set the PostgreSQL session timezone to UTC to avoid automatic conversions
+            await client.query("SET timezone = 'UTC'");
+            
+            // Instead of using AT TIME ZONE, use timestamp literal with time zone
             const updateQuery = `
               UPDATE "Assignment"
               SET 
                 assignment_name = $1,
                 assignment_description = $2,
                 assignment_date = $3::date,
-                assignment_due_date = $4::date,
+                assignment_due_date = $4::timestamp with time zone, -- Use explicit timestamp with timezone
                 validates = ARRAY[$5::json],
                 updated = CURRENT_TIMESTAMP
               WHERE assignmentid = $6 
@@ -1162,13 +1305,12 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               assignment_name,
               assignment_description || '',
               assignment_date,
-              assignment_due_date,
+              assignment_due_date, // Use the raw ISO string directly
               JSON.stringify(validateItem),
               assignmentid,
               parsedSubjectId
             ];
       
-            console.log('updating 2:', values);
       
             const result = await client.query(updateQuery, values);
       
@@ -1197,7 +1339,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
             client.release();
           }
         } catch (error: any) {
-          console.error('Assignment update failed:', error);
           return NextResponse.json({ 
             error: 'Failed to process assignment update',
             details: error.message 
@@ -1218,7 +1359,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
 
       return NextResponse.json(subjectResult.rows[0], { status: 200 });
     } catch (err: any) {
-      // console.error('Error processing POST action:', err);
       return NextResponse.json({ 
         error: 'Operation failed',
         details: err.message 

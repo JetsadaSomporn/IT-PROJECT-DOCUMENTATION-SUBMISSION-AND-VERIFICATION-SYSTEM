@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation'; 
-import Link from 'next/link'; // Import Link for navigation
+import Link from 'next/link';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBook, faUser, faUserGraduate } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../hooks/useAuth'; 
@@ -10,6 +10,7 @@ import SubjectCard from '../../../../components/SubjectCard';
 import dynamic from 'next/dynamic';
 import TabTransition from '../../../../components/TabTransition';
 import { signOut } from 'next-auth/react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 const TransitionLayout = dynamic(() => import('../../../../components/TransitionLayout'), {
   ssr: false
@@ -17,15 +18,16 @@ const TransitionLayout = dynamic(() => import('../../../../components/Transition
 
 const SubjectManagement: React.FC = () => {
   const router = useRouter();
-  const { user, isLoading } = useAuth(); // Use useAuth to get authenticated user
-  const currentYear = new Date().getFullYear();  // Add this line to get current year
-  const [subjects, setSubjects] = useState<any[]>([]); // Adjusted type
+  const { user, isLoading } = useAuth();
+  const currentYear = new Date().getFullYear();
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [newSubject, setNewSubject] = useState({
     subject_name: '',
     section: 0,
     subject_semester: 1,
-    subject_year: currentYear.toString(), // Set default to current year
+    subject_year: currentYear.toString(),
     group_data: {
       BIT: 0,
       Network: 0,
@@ -35,7 +37,7 @@ const SubjectManagement: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState('');
-  const [subjectFilter, setSubjectFilter] = useState(''); // Add this line to define subjectFilter
+  const [subjectFilter, setSubjectFilter] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fetchSubjects = useCallback(async () => {
@@ -55,8 +57,15 @@ const SubjectManagement: React.FC = () => {
   
       const data = await response.json();
       setSubjects(data);
+      
+      if (Array.isArray(data)) {
+        const uniqueYears = Array.from(new Set(data.map(subject => subject.subject_year)))
+          .filter(Boolean)
+          .sort();
+        
+        setAvailableYears(uniqueYears);
+      }
     } catch (error: any) {
-      console.error('Error fetching subjects:', error);
       if (error.message === 'Not authenticated') {
         router.push('/auth/login');
       }
@@ -69,7 +78,6 @@ const SubjectManagement: React.FC = () => {
     }
   }, [user, isLoading, fetchSubjects]);
 
-  //  form input change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (name.startsWith('group_data.')) {
@@ -78,28 +86,24 @@ const SubjectManagement: React.FC = () => {
         ...prev,
         group_data: {
           ...prev.group_data,
-          [groupField]: Number(value) // Ensure the value is a number
+          [groupField]: Number(value)
         }
       }));
     } else {
       setNewSubject(prev => ({
         ...prev,
-        [name]: name === 'section' || name === 'subject_semester' ? Number(value) : value // Convert to number
+        [name]: name === 'section' || name === 'subject_semester' ? Number(value) : value
       }));
     }
   };
 
-  // submit 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user?.id) {
-      console.log('Error: User not authenticated');
       alert('Please log in again to continue');
       return;
     }
-
-    console.log('Current user:', user);
 
     const newSubjectData = {
       subject_name: newSubject.subject_name,
@@ -109,8 +113,6 @@ const SubjectManagement: React.FC = () => {
       teachers: [user.id],
       group_data: newSubject.group_data,
     };
-
-    console.log('Sending subject data:', newSubjectData);
 
     try {
       const response = await fetch('/api/admin/subjectManagement', {
@@ -129,14 +131,12 @@ const SubjectManagement: React.FC = () => {
       }
 
       const addedSubject = await response.json();
-      console.log('Subject created successfully:', addedSubject);
-      
       setSubjects(prev => [...prev, addedSubject]);
       setNewSubject({
         subject_name: '',
         section: 0,
         subject_semester: 1,
-        subject_year: currentYear.toString(), // Set default to current year
+        subject_year: currentYear.toString(),
         group_data: {
           BIT: 0,
           Network: 0,
@@ -150,12 +150,10 @@ const SubjectManagement: React.FC = () => {
     }
   };
 
-  // Make handleSearch a stable callback
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   }, []);
 
-  // Fix SearchInput component to return a valid ReactNode
   const SearchInput = React.memo(() => (
     <input
       type="text"
@@ -166,36 +164,28 @@ const SubjectManagement: React.FC = () => {
     />
   ));
 
-  // filtered subjects logic
   const filteredSubjects = React.useMemo(() => {
     if (!Array.isArray(subjects)) return [];
     return subjects.filter(subject => {
       if (!subject) return false;
 
-      // Name filter
       const matchesName = subject.subject_name
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase());
 
-      // Subject filtr 
       const matchesSubject = subjectFilter
         ? subject.subject_name.toLowerCase().includes(subjectFilter.toLowerCase())
         : true;
 
-     
-
-      // Year filter
       const matchesYear = !yearFilter || subject.subject_year === yearFilter;
 
       return matchesName && matchesSubject && matchesYear;
     });
   }, [subjects, searchTerm, subjectFilter, yearFilter]);
 
- 
-// Export Header component
 const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   const { user } = useAuth();
-   const [showLogout, setShowLogout] = useState(false); // Added state for menu visibility
+   const [showLogout, setShowLogout] = useState(false);
     
     const handleLogout = () => {
       signOut(); 
@@ -217,6 +207,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
             <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
           </div>
           <div className="relative flex items-center space-x-4">
+            <NotificationDropdown />
             <div className="text-sm text-gray-600">{user?.name || 'ผู้ใช้'}</div>
             <button
               onClick={() => setShowLogout(prev => !prev)}
@@ -241,7 +232,6 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   );
 };
 
-// Export Sidebar component
 interface SidebarProps {
   isSidebarOpen: boolean;
   closeSidebar: () => void;
@@ -278,9 +268,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
       </nav>
     </div>
   </div>
-);const closeSidebar = () => setIsSidebarOpen(false);
+);
 
-  
+  const closeSidebar = () => setIsSidebarOpen(false);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -293,19 +284,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
        <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={closeSidebar} />
-        <Header openSidebar={() => setIsSidebarOpen(true)} /> {/* Ensure Header has access to openSidebar */}
-        {/* Backdrop for sidebar */}
+        <Header openSidebar={() => setIsSidebarOpen(true)} />
         {isSidebarOpen && (
           <div
             className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20"
-            onClick={closeSidebar} // Ensure clicking backdrop closes sidebar
+            onClick={closeSidebar}
           />
         )}
 
-      {/* Main Content */}
+      <main className="pt-20 pb-16 px-4"></main>
       <main className="pt-20 pb-16 px-4">
         <div className="max-w-7xl mx-auto">
-          {/* Search and Filters */}
           <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-200/50 p-6 mb-6">
             <div className="flex flex-wrap gap-4">
               <SearchInput />
@@ -317,13 +306,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                 onChange={(e) => setYearFilter(e.target.value)}
               >
                 <option value="">All Years</option>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-              
+                {availableYears.map(year => (
+                  <option key={year} value={year}>
+                    {parseInt(year) + 543}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          {/* Subject Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredSubjects.map((subject) => (
               <Link 
@@ -333,17 +323,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
               >
                 <div className="bg-gradient-to-br from-white to-blue-50 rounded-lg shadow-sm overflow-hidden 
                               hover:shadow-md transition-shadow duration-200 border border-blue-100">
-                  {/* Subject Header */}
                   <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-400 p-6">
                     <h3 className="text-xl font-medium text-white">{subject.subject_name}</h3>
                     <p className="text-blue-100 text-sm mt-1">Section {subject.section}</p>
                   </div>
-                  {/* Subject Details */}
                   <div className="p-4">
                     <div className="flex items-center text-sm text-blue-600">
                       <span>ภาคเรียน {subject.subject_semester}</span>
                       <span className="mx-2">•</span>
-                      <span>ปีการศึกษา {subject.subject_year}</span>
+                      <span>ปีการศึกษา {parseInt(subject.subject_year) + 543}</span>
                     </div>
                   </div>
                 </div>
@@ -351,7 +339,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
             ))}
           </div>
 
-          {/* Floating Action Button */}
           <button
             onClick={() => setShowForm(true)}
             className="fixed right-6 bottom-6 w-14 h-14 rounded-full bg-white text-blue-600 shadow-lg
@@ -365,10 +352,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
         </div>
       </main>
 
-    
       {showForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Simplified backdrop */}
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowForm(false)}
@@ -376,16 +361,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
           
           <div className="relative min-h-screen flex items-center justify-center p-4">
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl overflow-hidden">
-              {/* Form Header */}
               <div className="bg-blue-600 p-6">
                 <h2 className="text-2xl font-bold text-white">Create New Subject</h2>
                 <p className="text-blue-100 mt-1">Add a new subject to your educational program</p>
               </div>
 
-              {/* Form Content */}
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column */}
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -404,7 +386,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                     </div>
                   </div> 
 
-                  {/* Right Column */}
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -447,41 +428,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                       <input
                         type="text"
                         name="subject_year"
-                        value={currentYear}
+                        value={parseInt(currentYear.toString()) + 543}
                         readOnly
                         className="w-full px-4 py-2 rounded border border-gray-300
                                  bg-gray-50 text-gray-500 cursor-not-allowed"
                       />
                     </div>
-
-                    
-                    {/* <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-4">
-                        Track
-                      </label>
-                      <div className="grid grid-cols-1 gap-4">
-                        {['BIT', 'Network', 'Web'].map((track) => (
-                          <div key={track} className="flex items-center space-x-4">
-                            <span className="w-20 text-sm text-gray-600">{track}</span>
-                            <input
-                              type="number"
-                              name={`group_data.${track}`}
-                              value={newSubject.group_data[track as keyof typeof newSubject.group_data]}
-                              onChange={handleChange}
-                              className="flex-1 px-4 py-2 rounded border border-gray-300
-                                       focus:border-blue-500 focus:ring-1 focus:ring-blue-500
-                                       transition-colors"
-                              placeholder="0"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div> */}
-
                   </div>
                 </div>
 
-                {/* Form Actions */}
                 <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                   <button
                     type="button"
