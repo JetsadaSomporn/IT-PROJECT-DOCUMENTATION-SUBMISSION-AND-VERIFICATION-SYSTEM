@@ -150,6 +150,7 @@ NEXTAUTH_URL=http://localhost:3000
 - `@headlessui/react`: คอมโพเนนต์ UI
 - `react-icons`: ไอคอนเพิ่มเติม
 - `tailwindcss`, `postcss`, `autoprefixer`: การจัดการสไตล์
+- react-chartjs-2 : สำหรับการทำ Dashboard
 
 ติดตั้งทั้งหมดด้วย:
 ```bash
