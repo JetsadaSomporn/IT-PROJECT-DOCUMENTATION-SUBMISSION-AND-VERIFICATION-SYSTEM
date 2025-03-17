@@ -26,41 +26,19 @@ interface User {
   lastActive?: string;
 }
 
-interface HeaderProps {
-  openSidebar: () => void;
+interface Subject {
+  subjectid: string;
+  subject_name: string;
+  section: number;
 }
 
-interface SidebarProps {
-  isSidebarOpen: boolean;
-  closeSidebar: () => void;
-}
-
-// Add new interface for imported students
-interface ImportedStudent {
-  student_id: string;
-  username: string;
-  userlastname: string;
-  email: string;
-}
-
-// Add PreviewModal component near other interfaces
-interface PreviewModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  students: ImportedStudent[];
-  onConfirm: () => void;
-}
-
-
-
-const Header: React.FC<HeaderProps> = ({ openSidebar }) => {
+const Header: React.FC<{ openSidebar: () => void }> = ({ openSidebar }) => {
   const { user } = useAuth();
-
-   const [showLogout, setShowLogout] = useState(false); // Added state for menu visibility
+  const [showLogout, setShowLogout] = useState(false);
     
-    const handleLogout = () => {
-      signOut(); 
-    };
+  const handleLogout = () => {
+    signOut(); 
+  };
   
   return (
     <header className="bg-white shadow-md fixed w-full z-10 border-b border-blue-100">
@@ -91,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({ openSidebar }) => {
                   onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 hover:bg-gray-100"
                 >
-                  Logout
+                  ออกจากระบบ
                 </button>
               </div>
             )}
@@ -102,12 +80,12 @@ const Header: React.FC<HeaderProps> = ({ openSidebar }) => {
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
+const Sidebar: React.FC<{ isSidebarOpen: boolean; closeSidebar: () => void }> = ({ isSidebarOpen, closeSidebar }) => (
   <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                   bg-white w-64 border-r border-blue-100 transition-transform duration-300 ease-in-out z-30`}>
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-blue-600">Menu</h2>
+        <h2 className="text-xl font-semibold text-blue-600">เมนู</h2>
         <button onClick={closeSidebar} className="text-gray-500 hover:text-gray-700">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -139,7 +117,6 @@ const UserManagement: React.FC = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
   const [search, setSearch] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -149,15 +126,12 @@ const UserManagement: React.FC = () => {
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [editingUser, setEditingUser] = useState<string | null>(null);
-  // Add new state for imported students
-  const [importedStudents, setImportedStudents] = useState<ImportedStudent[]>([]);
-  // In the UserManagement component, add this state:
-  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
 
   function handleTypeChange(id: string, field: 'name' | 'lastName', value: string): void {
     setUsers(prevUsers =>
@@ -166,6 +140,7 @@ const UserManagement: React.FC = () => {
       )
     );
   }
+
   useEffect(() => {
     if (isLoading) return;
 
@@ -180,19 +155,39 @@ const UserManagement: React.FC = () => {
         if (Array.isArray(data)) {
           setUsers(data);
         } else {
-          console.error('Invalid response format:', data);
+          console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
           setUsers([]);
         }
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้:', error);
         setUsers([]);
+      }
+    };
+
+    const fetchSubjects = async () => {
+      try {
+        const response = await fetch('/api/admin/subjectManagement', {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error('ไม่สามารถดึงข้อมูลรายวิชา');
+        }
+        
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setSubjects(data);
+        }
+      } catch (error) {
+        console.error('เกิดข้อผิดพลาดในการดึงข้อมูลรายวิชา:', error);
       }
     };
 
     if (user && user.userType?.includes('admin')) {
       fetchUsers();
+      fetchSubjects();
     } else {
-      console.log('Access denied: Not an admin user');
+      console.log('การเข้าถึงถูกปฏิเสธ: ไม่ใช่ผู้ใช้ที่เป็นผู้ดูแลระบบ');
       router.push('/unauthorized');
     }
   }, [user, isLoading, router]);
@@ -208,12 +203,16 @@ const UserManagement: React.FC = () => {
     const matchesType = filters.type === 'all' || user.type.includes(filters.type);
     const matchesStatus = filters.status === 'all' || user.status === filters.status;
     const matchesUserType = userTypeFilter === 'all' || user.userType.includes(userTypeFilter);
-    return matchesSearch && matchesType && matchesStatus && matchesUserType;
+    const matchesSubject = !selectedSubject || 
+      (user.Subject_Available && user.Subject_Available.some(subject => 
+        subject.includes(subjects.find(s => s.subjectid === selectedSubject)?.subject_name || '')
+      ));
+    
+    return matchesSearch && matchesType && matchesStatus && matchesUserType && matchesSubject;
   });
 
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (userTypeFilter !== 'all') {
-      // If filtering by type, matching type goes first
       const aIsMatch = a.userType.includes(userTypeFilter);
       const bIsMatch = b.userType.includes(userTypeFilter);
       if (aIsMatch !== bIsMatch) {
@@ -221,7 +220,6 @@ const UserManagement: React.FC = () => {
       }
     }
     
-    // Then sort by name
     const nameA = `${a.name} ${a.lastName}`.toLowerCase();
     const nameB = `${b.name} ${b.lastName}`.toLowerCase();
     return sortConfig.direction === 'asc' 
@@ -259,14 +257,14 @@ const UserManagement: React.FC = () => {
               className="border border-gray-300 rounded-lg px-2 py-1 w-1/2"
               value={user.name}
               onChange={(e) => handleTypeChange(user.id, 'name', e.target.value)}
-              placeholder="First Name"
+              placeholder="ชื่อ"
             />
             <input
               type="text"
               className="border border-gray-300 rounded-lg px-2 py-1 w-1/2"
               value={user.lastName}
               onChange={(e) => handleTypeChange(user.id, 'lastName', e.target.value)}
-              placeholder="Last Name"
+              placeholder="นามสกุล"
             />
           </div>
         ) : (
@@ -286,7 +284,7 @@ const UserManagement: React.FC = () => {
             onClick={() => setEditingUser(editingUser === user.id ? null : user.id)}
             className="text-blue-600 hover:text-blue-900 transition-colors duration-200 px-2 py-1 rounded hover:bg-blue-50"
           >
-            {editingUser === user.id ? 'Save' : 'Edit'}
+            {editingUser === user.id ? 'บันทึก' : 'แก้ไข'}
           </button>
           <button
             onClick={() => {
@@ -295,7 +293,7 @@ const UserManagement: React.FC = () => {
             }}
             className="text-red-600 hover:text-red-900 transition-colors duration-200 px-2 py-1 rounded hover:bg-red-50"
           >
-            Delete
+            ลบ
           </button>
         </div>
       </td>
@@ -319,43 +317,46 @@ const UserManagement: React.FC = () => {
             className="bg-white rounded-2xl p-6 w-full max-w-md m-4"
             onClick={e => e.stopPropagation()}
           >
-            <h2 className="text-xl font-semibold mb-4">Filters</h2>
+            <h2 className="text-xl font-semibold mb-4">ตัวกรอง</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))}
                   className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
                 >
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="all">ทั้งหมด</option>
+                  <option value="active">ใช้งาน</option>
+                  <option value="inactive">ไม่ได้ใช้งาน</option>
                 </select>
               </div>
-              {/* <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select
-                  value={filters.type}
-                  onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
-                  className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
-                >
-                  <option value="all">All</option>
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                </select>
-              </div> */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ประเภทผู้ใช้</label>
                 <select
                   value={userTypeFilter}
                   onChange={(e) => setUserTypeFilter(e.target.value as 'all' | 'student' | 'teacher' | 'admin')}
                   className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
                 >
-                  <option value="all">All Users</option>
-                  <option value="teacher">Teachers First</option>
-                  <option value="student">Students First</option>
-                  <option value="admin">Admins First</option>
+                  <option value="all">ผู้ใช้ทั้งหมด</option>
+                  <option value="teacher">อาจารย์</option>
+                  <option value="student">นักศึกษา</option>
+                  <option value="admin">ผู้ดูแลระบบ</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รายวิชา</label>
+                <select
+                  value={selectedSubject}
+                  onChange={(e) => setSelectedSubject(e.target.value)}
+                  className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
+                >
+                  <option value="">ทุกรายวิชา</option>
+                  {subjects.map(subject => (
+                    <option key={subject.subjectid} value={subject.subjectid}>
+                      {subject.subject_name} (กลุ่ม {subject.section})
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -364,16 +365,18 @@ const UserManagement: React.FC = () => {
                 onClick={() => setFilterOpen(false)}
                 className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100"
               >
-                Cancel
+                ยกเลิก
               </button>
               <button
                 onClick={() => {
                   setFilters({ status: 'all', type: 'all' });
+                  setUserTypeFilter('all');
+                  setSelectedSubject('');
                   setFilterOpen(false);
                 }}
                 className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
               >
-                Clear Filters
+                ล้างตัวกรอง
               </button>
             </div>
           </motion.div>
@@ -382,66 +385,6 @@ const UserManagement: React.FC = () => {
     </AnimatePresence>
   );
 
-  const normalizeText = (text: string): string => {
-    if (!text) return '';
-    return String(text)
-      .toLowerCase()
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-      .replace(/[^a-z0-9\u0E00-\u0E7F]/g, ''); // Keep only alphanumeric and Thai characters
-  };
-  
-  const findHeaderRowIndex = (jsonData: any[][]): number => {
-    console.log('Starting header row search...');
-    
-    
-    const headerVariations = {
-      'studentid': ['รหัสประจำตัว', 'รหัสนักศึกษา', 'studentid', 'รหัส', 'id'],
-      'name': ['ชื่อ', 'name', 'firstname', 'ชื่อนักศึกษา'],
-      'email': ['email', 'kkumail', 'mail', 'อีเมล']
-    };
-  
-    // loop for get data from row
-    for (let i = 0; i < Math.min(10, jsonData.length); i++) { // Only check first 10 rows
-      const row = jsonData[i];
-      console.log(`Checking row ${i}:`, row);
-  
-      // pass empty rows
-      if (!row || row.length === 0) continue;
-  
-      
-      const normalizedRow = row.map(cell => normalizeText(cell));
-      console.log('Normalized row:', normalizedRow);
-  
-      const hasStudentId = headerVariations.studentid.some(variant => 
-        normalizedRow.some(cell => normalizeText(cell).includes(normalizeText(variant)))
-      );
-      const hasName = headerVariations.name.some(variant => 
-        normalizedRow.some(cell => normalizeText(cell).includes(normalizeText(variant)))
-      );
-      const hasEmail = headerVariations.email.some(variant => 
-        normalizedRow.some(cell => normalizeText(cell).includes(normalizeText(variant)))
-      );
-  
-      console.log('serach res:', { hasStudentId, hasName, hasEmail });
-  
-      if (hasStudentId && hasName) { // Make email optional
-        console.log(`found header row at index ${i}`);
-        return i;
-      }
-    }
-  
-    console.log('no header row found');
-    return -1;
-  };
-  
-
-  // Modify handleFileUpload to show preview modal
-
-
-  
- 
   const handleDelete = async (userId: string) => {
     try {
       const response = await fetch('/api/admin/userManagement', {
@@ -453,15 +396,15 @@ const UserManagement: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete user');
+        throw new Error('ไม่สามารถลบผู้ใช้ได้');
       }
 
       setUsers(users.filter(user => user.id !== userId));
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
     } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Failed to delete user');
+      console.error('เกิดข้อผิดพลาดในการลบผู้ใช้:', error);
+      alert('ไม่สามารถลบผู้ใช้ได้');
     }
   };
 
@@ -486,22 +429,22 @@ const UserManagement: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-lg shadow-xl w-full max-w-md m-4 p-6"
           >
-            <h2 className="text-xl font-semibold mb-4">Confirm Delete</h2>
+            <h2 className="text-xl font-semibold mb-4">ยืนยันการลบ</h2>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete {userToDelete.name} {userToDelete.lastName}? This action cannot be undone.
+              คุณแน่ใจหรือไม่ว่าต้องการลบ {userToDelete.name} {userToDelete.lastName}? การกระทำนี้ไม่สามารถยกเลิกได้
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setIsDeleteModalOpen(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
-                Cancel
+                ยกเลิก
               </button>
               <button
                 onClick={() => handleDelete(userToDelete.id)}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
               >
-                Delete
+                ลบ
               </button>
             </div>
           </motion.div>
@@ -525,8 +468,17 @@ const UserManagement: React.FC = () => {
           <div className="bg-white shadow-sm rounded-lg overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row gap-4">
-                {/* User Type Filter Buttons - Left Side */}
-                <div className="flex gap-2 order-2 sm:order-1">
+                <div className="flex flex-wrap gap-2 order-2 sm:order-1">
+                  <button 
+                    onClick={() => setUserTypeFilter('all')} 
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 
+                      ${userTypeFilter === 'all' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  >
+                    <FontAwesomeIcon icon={faUser} className="mr-2" />
+                    ทั้งหมด
+                  </button>
                   <button 
                     onClick={() => setUserTypeFilter('student')} 
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 
@@ -559,7 +511,6 @@ const UserManagement: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Search and Filter - Right Side */}
                 <div className="flex gap-2 ml-auto order-1 sm:order-2">
                   <div className="relative">
                     <input
@@ -580,12 +531,14 @@ const UserManagement: React.FC = () => {
                   >
                     <FontAwesomeIcon icon={faFilter} className="mr-2" />
                     ตัวกรอง
+                    {(selectedSubject || filters.status !== 'all' || filters.type !== 'all') && (
+                      <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></span>
+                    )}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Rest of the table code */}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <TableHeader />
@@ -593,6 +546,13 @@ const UserManagement: React.FC = () => {
                   {sortedUsers.map(user => (
                     <TableRow key={user.id} user={user} />
                   ))}
+                  {sortedUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                        ไม่พบข้อมูลผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -600,7 +560,6 @@ const UserManagement: React.FC = () => {
         </div>
       </main>
       <FilterModal />
-     
       <DeleteConfirmationModal />
     </div>
   );

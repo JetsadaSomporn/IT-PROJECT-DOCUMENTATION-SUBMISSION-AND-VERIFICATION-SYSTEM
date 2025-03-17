@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'ไม่ได้รับการยืนยันตัวตน' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -87,8 +87,8 @@ export async function GET(request: Request) {
       client.release();
     }
   } catch (error) {
-    console.error('Database error:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    console.error('ข้อผิดพลาดฐานข้อมูล:', error);
+    return NextResponse.json({ error: 'ไม่สามารถดึงข้อมูลผู้ใช้ได้' }, { status: 500 });
   }
 }
 
@@ -96,7 +96,7 @@ export async function PUT(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'ไม่ได้รับการยืนยันตัวตน' }, { status: 401 });
     }
 
     const { userId, newType } = await request.json();
@@ -109,8 +109,8 @@ export async function PUT(request: Request) {
       client.release();
     }
   } catch (error) {
-    console.error('Update error:', error);
-    return NextResponse.json({ error: 'Failed to update user type' }, { status: 500 });
+    console.error('ข้อผิดพลาดการอัปเดต:', error);
+    return NextResponse.json({ error: 'ไม่สามารถอัปเดตประเภทผู้ใช้ได้' }, { status: 500 });
   }
 }
 
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'ไม่ได้รับการยืนยันตัวตน' }, { status: 401 });
     }
 
     const { student_id, username, userlastname, email } = await request.json();
@@ -155,17 +155,17 @@ export async function POST(request: Request) {
       }
 
       await client.query('COMMIT');
-      return NextResponse.json({ message: 'Student added successfully' }, { status: 200 });
+      return NextResponse.json({ message: 'เพิ่มนักศึกษาเรียบร้อยแล้ว' }, { status: 200 });
     } catch (err: any) {
       await client.query('ROLLBACK');
-      console.error('Error adding student:', err);
-      return NextResponse.json({ error: 'Failed to add student' }, { status: 500 });
+      console.error('ข้อผิดพลาดในการเพิ่มนักศึกษา:', err);
+      return NextResponse.json({ error: 'ไม่สามารถเพิ่มนักศึกษาได้' }, { status: 500 });
     } finally {
       client.release();
     }
   } catch (error: any) {
-    console.error('Error in POST handler:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('ข้อผิดพลาดใน POST handler:', error);
+    return NextResponse.json({ error: 'ข้อผิดพลาดภายในเซิร์ฟเวอร์' }, { status: 500 });
   }
 }
 
@@ -173,7 +173,7 @@ export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'ไม่ได้รับการยืนยันตัวตน' }, { status: 401 });
     }
 
     const { userId } = await request.json();
@@ -192,8 +192,8 @@ export async function DELETE(request: Request) {
       client.release();
     }
   } catch (error) {
-    console.error('Delete error:', error);
-    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+    console.error('ข้อผิดพลาดการลบ:', error);
+    return NextResponse.json({ error: 'ไม่สามารถลบผู้ใช้ได้' }, { status: 500 });
   }
 }
 

@@ -20,7 +20,6 @@ interface User {
   type?: string[];
 }
 
-
 interface Group {
   groupid: number;
   groupname: string;
@@ -34,14 +33,12 @@ interface Group {
   teachers?: User[];
 }
 
-
 interface AdvisorSelection {
   advisor: number | null;  
   advisorOther: {
     advisor2?: number;  
   } | null;
 }
-
 
 interface GroupFormData {
   User: string[]; 
@@ -58,12 +55,9 @@ interface TrackGroup {
   status: 'available' | 'taken';
 }
 
-
-
 const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   const { user } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
-
   const handleLogout = () => signOut();
 
   return (
@@ -71,10 +65,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <button 
-              onClick={openSidebar}
-              className="p-2 rounded-full hover:bg-blue-50 transition-colors duration-200"
-            >
+            <button onClick={openSidebar} className="p-2 rounded-full hover:bg-blue-50 transition-colors duration-200">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
@@ -83,19 +74,13 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
           </div>
           <div className="relative flex items-center space-x-4">
             <div className="text-sm text-gray-600">{user?.name || 'ผู้ใช้'}</div>
-            <button
-              onClick={() => setShowLogout(prev => !prev)}
-              className="w-8 h-8 rounded-full bg-blue-600 text-white"
-            >
+            <button onClick={() => setShowLogout(prev => !prev)} className="w-8 h-8 rounded-full bg-blue-600 text-white">
               {user?.name?.[0] || 'ผ'}
             </button>
             {showLogout && (
               <div className="absolute right-0 mt-10 w-32 bg-white shadow-md border rounded">
-                <button
-                  onClick={handleLogout}
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                >
-                  Logout
+                <button onClick={handleLogout} className="block w-full text-left px-4 py-2 hover:bg-gray-100">
+                  ออกจากระบบ
                 </button>
               </div>
             )}
@@ -116,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                   bg-white w-64 border-r border-blue-100 transition-transform duration-300 ease-in-out z-30`}>
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-blue-600">Menu</h2>
+        <h2 className="text-xl font-semibold text-blue-600">เมนู</h2>
         <button onClick={closeSidebar} className="text-gray-500 hover:text-gray-700">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -127,17 +112,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
         <Link href="/dashboard/admin/subjectManagement" 
           className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
           <FontAwesomeIcon icon={faBook} className="w-5 h-5 mr-3" />
-          Subjects
+          รายวิชา
         </Link>
         <Link href="/dashboard/admin/userManagement" 
           className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
           <FontAwesomeIcon icon={faUserGraduate} className="w-5 h-5 mr-3" />
-          Users
+          ผู้ใช้
         </Link>
         <Link href="/dashboard/admin/groupManagement" 
           className="flex items-center px-4 py-3 text-blue-600 bg-blue-50 rounded-xl">
           <FontAwesomeIcon icon={faUsers} className="w-5 h-5 mr-3" />
-          Groups
+          กลุ่ม
         </Link>
       </nav>
     </div>
@@ -166,7 +151,7 @@ const GroupEditModal: React.FC<{
 
   const updateStudent = (index: number, studentId: string) => {
     const updatedUsers = [...formData.User];
-    updatedUsers[index] = studentId; // Assign string directly
+    updatedUsers[index] = studentId; 
     setFormData({ ...formData, User: updatedUsers });
   };
 
@@ -178,7 +163,7 @@ const GroupEditModal: React.FC<{
       overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
     >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
-        <h2 className="text-xl font-semibold mb-4">Edit Group</h2>
+        <h2 className="text-xl font-semibold mb-4">แก้ไขกลุ่ม</h2>
         <form onSubmit={(e) => {
           e.preventDefault();
           onSave(formData);
@@ -191,9 +176,8 @@ const GroupEditModal: React.FC<{
                   value={userId}
                   onChange={(e) => updateStudent(index, e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded"
-                  placeholder="Student ID"
+                  placeholder="รหัสนักศึกษา"
                 />
-               
               </div>
             ))}
             <button
@@ -201,7 +185,7 @@ const GroupEditModal: React.FC<{
               onClick={addStudent}
               className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             >
-              Add Student
+              เพิ่มนักศึกษา
             </button>
           </div>
           <div className="mt-4 flex justify-end space-x-3">
@@ -210,13 +194,13 @@ const GroupEditModal: React.FC<{
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
             >
-              Cancel
+              ยกเลิก
             </button>
             <button
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
-              Save Changes
+              บันทึกการเปลี่ยนแปลง
             </button>
           </div>
         </form>
@@ -237,7 +221,7 @@ const TransferGroupsModal: React.FC<{
   
   const handleTransfer = async () => {
     if (!targetSubjectId) {
-      alert('Please select a target subject');
+      alert('กรุณาเลือกรายวิชาปลายทาง');
       return;
     }
     
@@ -246,8 +230,8 @@ const TransferGroupsModal: React.FC<{
       await onTransfer(Number(targetSubjectId));
       onClose();
     } catch (error) {
-      console.error('Transfer failed:', error);
-      alert('Failed to transfer groups. Please try again.');
+      console.error('การย้ายล้มเหลว:', error);
+      alert('ไม่สามารถย้ายกลุ่มได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsTransferring(false);
     }
@@ -261,21 +245,21 @@ const TransferGroupsModal: React.FC<{
       overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
     >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Transfer Groups to Another Subject</h2>
+        <h2 className="text-xl font-semibold mb-4">ย้ายกลุ่มไปยังรายวิชาอื่น</h2>
         <div className="mb-6">
           <p className="text-gray-600 mb-4">
             ย้ายกลุ่ม
           </p>
           
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Source Subject
+            รายวิชาต้นทาง
           </label>
           <div className="p-2 bg-gray-50 border rounded mb-4">
-            {subjects.find(sub => sub.subjectid === sourceSubjectId)?.subject_name || 'Unknown subject'}
+            {subjects.find(sub => sub.subjectid === sourceSubjectId)?.subject_name || 'ไม่พบรายวิชา'}
           </div>
           
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Target Subject
+            รายวิชาปลายทาง
           </label>
           <select
             value={targetSubjectId}
@@ -283,12 +267,12 @@ const TransferGroupsModal: React.FC<{
             className="w-full p-2 border rounded mb-2"
             disabled={isTransferring}
           >
-            <option value="">Select Target Subject</option>
+            <option value="">เลือกรายวิชาปลายทาง</option>
             {subjects
               .filter(subject => subject.subjectid !== sourceSubjectId)
               .map((subject) => (
                 <option key={subject.subjectid} value={subject.subjectid}>
-                  {subject.subject_name} - Section {subject.section}
+                  {subject.subject_name} - section {subject.section}
                 </option>
               ))}
           </select>
@@ -301,7 +285,7 @@ const TransferGroupsModal: React.FC<{
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
             disabled={isTransferring}
           >
-            Cancel
+            ยกเลิก
           </button>
           <button
             type="button"
@@ -309,7 +293,7 @@ const TransferGroupsModal: React.FC<{
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
             disabled={!targetSubjectId || isTransferring}
           >
-            {isTransferring ? 'Transferring...' : 'Transfer Groups'}
+            {isTransferring ? 'กำลังย้าย...' : 'ย้ายกลุ่ม'}
           </button>
         </div>
       </div>
@@ -318,7 +302,6 @@ const TransferGroupsModal: React.FC<{
 };
 
 type TrackType = 'ALL' | 'BIT' | 'Web&Mobile' | 'Network';
-
 
 const TrackBottomMenu: React.FC<{
   selectedTrack: TrackType;
@@ -359,7 +342,7 @@ const TrackBottomMenu: React.FC<{
                 </span>
                 <span>{track}</span>
                 <span className="text-xs mt-1">
-                  {track === 'ALL' ? `All Groups (${count})` : `${count} Groups`}
+                  {track === 'ALL' ? `กลุ่มทั้งหมด (${count})` : `${count} กลุ่ม`}
                 </span>
               </button>
             );
@@ -377,7 +360,6 @@ interface SubjectData {
   subject_semester: string;
   subject_year: string;
 }
-
 
 interface StudentInGroup {
   studentId: string;
@@ -406,13 +388,12 @@ interface Teacher {
   email: string;
 }
 
-
 const GroupManagement: React.FC = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTrack, setSelectedTrack] = useState<TrackType>('BIT'); // Default to BIT instead of ALL
+  const [selectedTrack, setSelectedTrack] = useState<TrackType>('BIT'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
@@ -423,7 +404,6 @@ const GroupManagement: React.FC = () => {
   const [inputValue, setInputValue] = useState<{ [key: string]: string }>({});
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
-  
   const [students, setStudents] = useState<Array<{
     studentId: string;
     name: string;
@@ -457,9 +437,8 @@ const GroupManagement: React.FC = () => {
         
         const studentTrack = data.track || selectedTrack;
   
-       
         if (selectedTrack !== 'ALL' && studentTrack && studentTrack !== selectedTrack) {
-          alert(`Error: This student belongs to ${studentTrack} track and cannot be added to ${selectedTrack} track.`);
+          alert(`ข้อผิดพลาด: นักศึกษานี้อยู่ในแทร็ค ${studentTrack} ไม่สามารถเพิ่มเข้ากลุ่มแทร็ค ${selectedTrack} ได้`);
           updatedStudents[index] = {
             ...updatedStudents[index],
             studentId: '',
@@ -482,57 +461,47 @@ const GroupManagement: React.FC = () => {
             note: ''
           };
   
-         
           const groupNumber = Math.floor(index / 2) + 1;
           const groupName = `${selectedTrack}${groupNumber.toString().padStart(2, '0')}`;
-          //get group
           const existingGroup = groups.find(g => g.groupname === groupName) || {
             teacher: [],
             note: ''
           };
   
-          // update member
           const groupMembers = updatedStudents
             .filter((_, idx) => Math.floor(idx / 2) === Math.floor(index / 2))
-            .filter(s => s.studentId) // Only include students with IDs
+            .filter(s => s.studentId) 
             .map(s => ({
               studentId: s.studentId
             }));
   
-          // save note and advisor
           await saveGroup({
             groupName,
             members: groupMembers,
-            teachers: existingGroup.teacher || [], // Keep existing teachers
-            note: existingGroup.note || '' // Keep existing note
+            teachers: existingGroup.teacher || [], 
+            note: existingGroup.note || '' 
           });
         }
         
         setStudents(updatedStudents);
       }
     } catch (err) {
-      console.error('Error fetching student:', err);
+      console.error('เกิดข้อผิดพลาดในการดึงข้อมูลนักศึกษา:', err);
     }
   };
 
- //for seperate group
   useEffect(() => {
-    //defaul all
     setSelectedTrack('ALL');
     if (selectedSubject) {
       fetchGroups();
     }
   }, [selectedSubject]);
 
-
 const filteredGroups = groups.filter(group => {
   if (selectedTrack === 'ALL') return true;
   return group.groupname.startsWith(selectedTrack);
 });
 
-
-
-// get group if it empty
 const fetchGroups = async () => {
   if (!selectedSubject) {
     setGroups([]);
@@ -577,17 +546,11 @@ const fetchGroups = async () => {
       setEditingGroup(null);
     } catch (error) {
       console.error('fail updating group:', error);
-      // alert('Failed to update group');
     }
   };
 
-
-
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  
-
-  
 const stuInput = async (value: string, groupName: string, memberIndex: number) => {
   setInputValue(prev => ({
     ...prev,
@@ -614,9 +577,8 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
         type: data.type
       };
 
-      // Create a new group object if it doesn't exist
       const currentGroup = groups.find(g => g.groupname === groupName) || {
-        groupid: Date.now(), // Temporary ID for new groups
+        groupid: Date.now(), 
         groupname: groupName,
         projectname: null,
         subject: selectedSubject || 0,
@@ -627,21 +589,17 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
         students: []
       } as Group;
 
-      // Create a new array of students with the correct length
       let updatedStudents = [...(currentGroup.students || [])];
       while (updatedStudents.length <= memberIndex) {
         updatedStudents.push({} as User);
       }
       
-      // Update the specific slot
       updatedStudents[memberIndex] = updatedStudent;
 
-      // Update groups state with proper type checking
       setGroups(prev => {
         const existingGroupIndex = prev.findIndex(g => g.groupname === groupName);
         
         if (existingGroupIndex >= 0) {
-          // Update existing group
           const newGroups = [...prev];
           newGroups[existingGroupIndex] = {
             ...newGroups[existingGroupIndex],
@@ -649,7 +607,6 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
           };
           return newGroups;
         } else {
-          // Add new group
           return [...prev, {
             ...currentGroup,
             students: updatedStudents
@@ -657,7 +614,6 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
         }
       });
 
-      // Save to backend with only valid students
       await saveGroup({
         groupName,
         members: updatedStudents.filter(s => s?.userid).map(s => ({
@@ -674,7 +630,6 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
   }
 };
 
-
 const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
   const currentGroup = groups.find(g => g.groupname === groupName);
   if (!currentGroup) return;
@@ -687,7 +642,6 @@ const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
       .filter(member => member && member.userid)
       .map(member => ({ studentId: member.userid }));
 
-    
     if (filteredMembers.length === 0) {
       setProjectTitles(prev => {
         const newTitles = { ...prev };
@@ -713,7 +667,6 @@ const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
       [`${groupName}-${memberIndex}`]: ''
     }));
 
-    // Update local state for only this group instead of refetching all groups.
     setGroups(prev => prev.map(g => {
       if (g.groupname === groupName) {
         return { ...g, students: updatedMembers };
@@ -721,24 +674,20 @@ const handleRemoveStudent = async (groupName: string, memberIndex: number) => {
       return g;
     }));
 
-    // Removed: await fetchGroups();
   } catch (error) {
     console.error('fail removing student:', error);
   }
 };
 
-
 const [projectTitles, setProjectTitles] = useState<{[key: string]: string}>({});
 const [projectNameTimeout, setProjectNameTimeout] = useState<{[key: string]: NodeJS.Timeout}>({});
 
 const ProjectNameEdit = async (groupName: string, projectName: string) => {
-  // Update local state immediately 
   setProjectTitles(prev => ({
     ...prev,
     [groupName]: projectName
   }));
 
-  // Clear existing timeout
   if (projectNameTimeout[groupName]) {
     clearTimeout(projectNameTimeout[groupName]);
   }
@@ -748,7 +697,6 @@ const ProjectNameEdit = async (groupName: string, projectName: string) => {
       const groupToUpdate = groups.find(g => g.groupname === groupName);
       if (!groupToUpdate) return;
 
-      // Update local state first
       setGroups(prev => prev.map(g => {
         if (g.groupname === groupName) {
           return {
@@ -759,11 +707,10 @@ const ProjectNameEdit = async (groupName: string, projectName: string) => {
         return g;
       }));
 
-      // Save to backend
       await saveGroup({
         groupName,
         members: groupToUpdate.students
-          .filter(s => s && s.userid)
+          .filter(s => s.userid)
           .map(s => ({
             studentId: s.userid,
           })),
@@ -780,7 +727,6 @@ const ProjectNameEdit = async (groupName: string, projectName: string) => {
 
     } catch (error) {
       console.error('Failed to save project name:', error);
-      // Revert to previous value on error
       setProjectTitles(prev => ({
         ...prev,
         [groupName]: groups.find(g => g.groupname === groupName)?.projectname || ''
@@ -793,7 +739,6 @@ const ProjectNameEdit = async (groupName: string, projectName: string) => {
     [groupName]: timeoutId
   }));
 };
-
 
 const [noteTitles, setNoteTitles] = useState<{[key: string]: string}>({});
 const [noteTimeout, setNoteTimeout] = useState<{[key: string]: NodeJS.Timeout}>({});
@@ -846,30 +791,25 @@ const showTrackInfo = () => {
   const currentSubject = subjects.find(sub => sub.subjectid === selectedSubject);
   const relevantGroups = selectedTrack === 'ALL' ? groups : filteredGroups;
   
-  // Create all groups including empty slots
   let allGroups = selectedTrack === 'ALL'
     ? relevantGroups
     : [...relevantGroups];
 
-  // Add empty slots only for non-ALL tracks
   if (selectedTrack !== 'ALL') {
     const emptySlots = createEmptyGroupSlots(selectedTrack);
     allGroups = [...allGroups, ...emptySlots];
   }
 
-  // Sort groups by number
   allGroups.sort((a, b) => {
     const numA = parseInt(a.groupname.match(/\d+$/)?.[0] || '0');
     const numB = parseInt(b.groupname.match(/\d+$/)?.[0] || '0');
     return numA - numB;
   });
 
-  // Remove duplicates
   const uniqueGroups = allGroups.filter((group, index, self) =>
     index === self.findIndex((g) => g.groupname === group.groupname)
   );
 
-  // Count only groups with students
   const registeredGroupCount = selectedTrack === 'ALL'
     ? groups.filter(g => g.students?.some(s => s.userid)).length
     : groups.filter(g => 
@@ -879,69 +819,61 @@ const showTrackInfo = () => {
 
   return (
     <div className="space-y-8">
-      {/* Subject Header with Track Count */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {currentSubject?.subject_name} - Section {currentSubject?.section}
+              {currentSubject?.subject_name} - เซคชั่น {currentSubject?.section}
             </h1>
             <div className="flex space-x-6 text-sm text-gray-600">
-              <span>Year {currentSubject?.subject_year}</span>
-              <span>Semester {currentSubject?.subject_semester}</span>
+              <span>ปีการศึกษา {currentSubject?.subject_year}</span>
+              <span>ภาคเรียนที่ {currentSubject?.subject_semester}</span>
             </div>
           </div>
           <div className="text-center px-6 py-3 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600">{selectedTrack} Groups</p>
+            <p className="text-sm text-gray-600">กลุ่ม {selectedTrack}</p>
             <p className="text-3xl font-bold text-blue-600">{registeredGroupCount}</p>
           </div>
         </div>
       </div>
 
-      {/* Groups Section */}
       <div className="space-y-6">
         {uniqueGroups.map((group) => (
           <div key={group.groupid || group.groupname} className="bg-white rounded-lg shadow-lg overflow-hidden">
-            {/* Group Name Row - Spans entire width */}
             <div className="bg-blue-600 px-6 py-3">
               <h3 className="text-xl font-semibold text-white">{group.groupname}</h3>
             </div>
 
-        
             <div className="px-6 py-4 bg-gray-50 border-b">
               <div className="flex items-center space-x-4">
-                <label className="text-sm font-medium text-gray-700 min-w-[100px]">Project Title</label>
+                <label className="text-sm font-medium text-gray-700 min-w-[100px]">ชื่อโปรเจค</label>
                 <input
                   type="text"
                   value={projectTitles[group.groupname] ?? group.projectname ?? ''}
                   onChange={(e) => ProjectNameEdit(group.groupname, e.target.value)}
                   className="flex-1 px-3 py-2 border rounded"
-                  placeholder="Enter project title..."
+                  placeholder="ระบุชื่อโปรเจค..."
                   disabled={selectedTrack === 'ALL'} 
                 />
               </div>
             </div>
 
-            {/* Nested Table for Members */}
             <div className="px-6 py-4">
               <table className="min-w-full">
-                {/* Column Headers */}
                 <thead>
                   <tr className="border-b">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Student ID</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Track</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Advisor</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Note</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">สมาชิก</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">รหัสนักศึกษา</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ชื่อ-นามสกุล</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">แทร็ค</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ที่ปรึกษา</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">หมายเหตุ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(() => {
-                    // Allow for flexible number of slots (1-3 members)
                     const maxSlots = 3;
                     const memberRows = group.students ? [...group.students] : [];
-                    // Add empty slots up to maxSlots
                     while (memberRows.length < maxSlots) {
                       memberRows.push({} as any);
                     }
@@ -956,7 +888,7 @@ const showTrackInfo = () => {
                               value={student?.userid || inputValue[`${group.groupname}-${index}`] || ''}
                               onChange={(e) => stuInput(e.target.value, group.groupname, index)}
                               className="w-32 px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Student ID"
+                              placeholder="รหัสนักศึกษา"
                               maxLength={11}
                               disabled={selectedTrack === 'ALL'}
                             />
@@ -964,7 +896,7 @@ const showTrackInfo = () => {
                               <button
                                 onClick={() => handleRemoveStudent(group.groupname, index)}
                                 className="p-1 text-gray-400 hover:text-red-500"
-                                title="Clear student"
+                                title="ลบนักศึกษา"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -986,7 +918,7 @@ const showTrackInfo = () => {
                                 value={noteTitles[group.groupname] ?? group.note ?? ''}
                                 onChange={(e) => NoteEdit(group.groupname, e.target.value)}
                                 className="w-full px-2 py-1 border rounded"
-                                placeholder="Add note..."
+                                placeholder="เพิ่มหมายเหตุ..."
                                 disabled={selectedTrack === 'ALL'}
                               />
                             </td>
@@ -1004,7 +936,6 @@ const showTrackInfo = () => {
     </div>
   );
 };
-
 
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -1046,7 +977,7 @@ const showTrackInfo = () => {
         }
 
         const data = await response.json();
-        console.log('Subjects data:', data); // Debug log
+        console.log('Subjects data:', data); 
         setSubjects(data || []);
       } catch (error) {
         console.error('fail fetching subjects:', error);
@@ -1063,12 +994,11 @@ const showTrackInfo = () => {
       }>;
       teachers: string[];
       note?: string;
-      projectName?: string; // Add this line
+      projectName?: string; 
     }) => {
       if (!selectedSubject) return null;
     
       try {
-        // Filter out empty member slots before saving
         const validMembers = groupData.members.filter(m => m.studentId && m.studentId.trim() !== '');
 
         const response = await fetch('/api/admin/groupManagement', {
@@ -1096,7 +1026,6 @@ const showTrackInfo = () => {
       }
     };
 
-  
   useEffect(() => {
     fetch('/api/admin/groupManagement?action=get-teachers')
       .then(res => res.json())
@@ -1104,141 +1033,91 @@ const showTrackInfo = () => {
       .catch(err => console.error('Error fetching teachers:', err));
   }, []);
 
-  function AdvisorDropdown({
-    groupName,
-    group
-  }: {
-    groupName: string;
-    group: Group;
-  }) {
-    const [isDropdownVisible, setIsDropdownVisible] = useState(false);
-    const [selectedAdvisors, setSelectedAdvisors] = useState<string[]>(
-      group.teacher || []
-    );
-  
-    const handleTeacherSelection = async (teacherId: string) => {
-      let newSelection = [...selectedAdvisors];
-      
-      if (newSelection.includes(teacherId)) {
-        
-        newSelection = newSelection.filter(id => id !== teacherId);
-      } else {
-    
-        if (newSelection.length < 2) {
-          newSelection.push(teacherId);
-        } else {
-          alert('max 2 advisor');
-          return;
-        }
-      }
-  
-      setSelectedAdvisors(newSelection);
-  
-      await saveGroup({
-        groupName,
-        members: group.students.map(s => ({
-          studentId: s.userid,
-        })),
-        teachers: newSelection,
-        note: group.note || undefined
-      });
-    };
-  
-    return (
-      <div className="relative">
-       
-        <button
-          type="button"
-          onClick={() => setIsDropdownVisible(!isDropdownVisible)}
-          className="w-full px-4 py-2 text-base bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          disabled={selectedTrack === 'ALL'} // disable in ALL view
-        >
-          Select Advisors ({selectedAdvisors.length}/2)
-        </button>
-  
-        {isDropdownVisible && (
-          <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-              {/* Header */}
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Select Advisors</h3>
-                <button
-                  onClick={() => setIsDropdownVisible(false)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <span className="sr-only">Close</span>
-                  ✕
-                </button>
-              </div>
-  
-              {/* Content area with scroll */}
-              <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
-                {allTeachers.map(teacher => (
-                  <label 
-                    key={teacher.userid} 
-                    className="flex items-center p-3 mb-2 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAdvisors.includes(teacher.userid)}
-                      onChange={() => handleTeacherSelection(teacher.userid)}
-                      className="mr-4 w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-base font-medium text-gray-900">
-                        {teacher.username} {teacher.userlastname}
-                      </span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-  
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-gray-200">
-                <button
-                  onClick={() => setIsDropdownVisible(false)}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Done
-                </button>
-              </div>
+function AdvisorDropdown({ groupName, group }: { groupName: string; group: Group; }) {
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [selectedAdvisors, setSelectedAdvisors] = useState<string[]>(group.teacher || []);
+  const handleTeacherSelection = async (teacherId: string) => {
+    let newSelection = [...selectedAdvisors];
+    if (newSelection.includes(teacherId)) {
+      newSelection = newSelection.filter(id => id !== teacherId);
+    } else {
+      if (newSelection.length < 2) newSelection.push(teacherId);
+      else { alert('อาจารย์ที่ปรึกษาได้สูงสุด 2 ท่าน'); return; }
+    }
+    setSelectedAdvisors(newSelection);
+    await saveGroup({
+      groupName,
+      members: group.students.map(s => ({ studentId: s.userid })),
+      teachers: newSelection,
+      note: group.note || undefined
+    });
+  };
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsDropdownVisible(!isDropdownVisible)}
+        className="w-full px-4 py-2 text-base bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        disabled={selectedTrack === 'ALL'}
+      >
+        เลือกอาจารย์ที่ปรึกษา ({selectedAdvisors.length}/2)
+      </button>
+      {isDropdownVisible && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">เลือกอาจารย์ที่ปรึกษา</h3>
+              <button onClick={() => setIsDropdownVisible(false)} className="text-gray-400 hover:text-gray-500">
+                <span className="sr-only">ปิด</span>✕
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+              {allTeachers.map(teacher => (
+                <label key={teacher.userid} className="flex items-center p-3 mb-2 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100">
+                  <input
+                    type="checkbox"
+                    checked={selectedAdvisors.includes(teacher.userid)}
+                    onChange={() => handleTeacherSelection(teacher.userid)}
+                    className="mr-4 w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-base font-medium text-gray-900">
+                      {teacher.username} {teacher.userlastname}
+                    </span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200">
+              <button onClick={() => setIsDropdownVisible(false)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                เสร็จสิ้น
+              </button>
             </div>
           </div>
-        )}
-  
-        {/* Selected advisors display */}
-        <div className="mt-2 space-y-2">
-          {selectedAdvisors.map((teacherId) => {
-            const teacher = allTeachers.find(t => t.userid === teacherId);
-            return teacher ? (
-              <div key={teacherId} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
-                <span className="text-sm font-medium text-blue-700">
-                  {teacher.username} {teacher.userlastname}
-                </span>
-                <button
-                  onClick={() => handleTeacherSelection(teacherId)}
-                  className="text-blue-400 hover:text-blue-600"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : null;
-          })}
         </div>
+      )}
+      <div className="mt-2 space-y-2">
+        {selectedAdvisors.map((teacherId) => {
+          const teacher = allTeachers.find(t => t.userid === teacherId);
+          return teacher ? (
+            <div key={teacherId} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+              <span className="text-sm font-medium text-blue-700">{teacher.username} {teacher.userlastname}</span>
+              <button onClick={() => handleTeacherSelection(teacherId)} className="text-blue-400 hover:text-blue-600">✕</button>
+            </div>
+          ) : null;
+        })}
       </div>
-    );
-  }
-  
+    </div>
+  );
+}
 
 const INITIAL_GROUP_COUNT = 20;
 
 const createEmptyGroupSlots = (track: TrackType) => {
   if (track === 'ALL') return [];
 
-  // Get existing groups for this track only
   const trackGroups = groups.filter(group => group.groupname.startsWith(track));
 
-  // Get existing group numbers
   const existingNumbers = trackGroups
     .map(g => {
       const match = g.groupname.match(/\d+$/);
@@ -1246,28 +1125,23 @@ const createEmptyGroupSlots = (track: TrackType) => {
     })
     .filter(num => !isNaN(num));
 
-  // Get highest existing group number
   const highestGroupNum = Math.max(0, ...existingNumbers);
 
-  // Create array of needed numbers from 1 to INITIAL_GROUP_COUNT
   const neededNumbers = Array.from(
     { length: INITIAL_GROUP_COUNT }, 
     (_, i) => i + 1
   );
 
-  // Find missing numbers in the sequence
   const missingNumbers = neededNumbers.filter(
     num => !existingNumbers.includes(num)
   );
 
-  // If we have 19 or more filled groups, add the next number
   const filledGroups = trackGroups.filter(g => g.students?.some(s => s.userid));
   if (filledGroups.length >= 19) {
     const nextNumber = Math.max(highestGroupNum + 1, INITIAL_GROUP_COUNT + 1);
     missingNumbers.push(nextNumber);
   }
 
-  // Create empty groups for all missing numbers
   return missingNumbers.map(num => ({
     groupid: -num,
     groupname: `${track}${String(num).padStart(2, '0')}`,
@@ -1281,10 +1155,8 @@ const createEmptyGroupSlots = (track: TrackType) => {
   }));
 };
 
-  // Add this state for the transfer modal
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  // Add this function to handle group transfer
   const handleTransferGroups = async (targetSubjectId: number) => {
     if (!selectedSubject) return;
     
@@ -1301,13 +1173,13 @@ const createEmptyGroupSlots = (track: TrackType) => {
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to transfer groups');
+        throw new Error(result.error || 'ย้ายกลุ่มไม่สำเร็จ');
       }
       
-      alert('Groups transferred successfully!');
-      await fetchGroups(); // Refresh the current view
+      alert('ย้ายกลุ่มสำเร็จ!');
+      await fetchGroups(); 
     } catch (error) {
-      console.error('Error transferring groups:', error);
+      console.error('เกิดข้อผิดพลาดในการย้ายกลุ่ม:', error);
       throw error;
     }
   };
@@ -1324,10 +1196,10 @@ const createEmptyGroupSlots = (track: TrackType) => {
               onChange={(e) => setSelectedSubject(Number(e.target.value))}
               className="block w-full md:w-2/3 p-2 border rounded"
             >
-              <option value="">Select Subject</option>
+              <option value="">เลือกรายวิชา</option>
               {subjects.map((subject) => (
                 <option key={subject.subjectid} value={subject.subjectid}>
-                  {subject.subject_name} - Section {subject.section}
+                  {subject.subject_name} - เซคชั่น {subject.section}
                 </option>
               ))}
             </select>
@@ -1337,10 +1209,10 @@ const createEmptyGroupSlots = (track: TrackType) => {
                 onClick={() => setIsTransferModalOpen(true)}
                 className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
-                Transfer Groups
+                ย้ายกลุ่ม
               </button>
             )}
           </div>
@@ -1355,7 +1227,6 @@ const createEmptyGroupSlots = (track: TrackType) => {
         groups={groups}
       />
 
-      {/* Add the transfer modal */}
       <TransferGroupsModal
         isOpen={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
@@ -1364,7 +1235,6 @@ const createEmptyGroupSlots = (track: TrackType) => {
         onTransfer={handleTransferGroups}
       />
 
-      {/* Existing modal */}
       {editingGroup && (
         <GroupEditModal
           isOpen={!!editingGroup}

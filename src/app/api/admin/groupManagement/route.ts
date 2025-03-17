@@ -14,13 +14,10 @@ export async function GET(req: NextRequest) {
   const client = await pool.connect();
   try {
     if (action === 'get-student') {
-      // Normalize the student ID first
       const normalizedId = id?.replace(/[^0-9]/g, '');
       
-      console.log('Looking up student with normalized ID:', normalizedId);
-      
       if (!normalizedId || normalizedId.length !== 10) {
-        return NextResponse.json({ error: 'Invalid student ID' }, { status: 400 });
+        return NextResponse.json({ error: 'รหัสนักศึกษาไม่ถูกต้อง' }, { status: 400 });
       }
 
       const query = `
@@ -40,31 +37,27 @@ export async function GET(req: NextRequest) {
       
       try {
         const result = await client.query(query, [normalizedId]);
-        console.log('Student lookup result:', result.rows[0]);
         
         if (result.rows.length === 0) {
-          return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+          return NextResponse.json({ error: 'ไม่พบข้อมูลนักศึกษา' }, { status: 404 });
         }
         
-  
         const fallbackTrack = searchParams.get('track');
       
         if (fallbackTrack) {
           result.rows[0].track = fallbackTrack;
         }
         
-      
         return NextResponse.json({
           ...result.rows[0],
-          userid: normalizedId // Ensure normalized ID is returned
+          userid: normalizedId
         });
       } catch (error) {
-        console.error('Database error:', error);
-        return NextResponse.json({ error: 'Database error' }, { status: 500 });
+        console.error('ข้อผิดพลาดฐานข้อมูล:', error);
+        return NextResponse.json({ error: 'ข้อผิดพลาดฐานข้อมูล' }, { status: 500 });
       }
     }
     
-    // Handle get-subjects action
     if (action === 'get-subjects') {
       const subjectsQuery = `
         SELECT 
@@ -81,7 +74,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(subjectsResult.rows);
     }
 
-    // Add get-teachers action
     if (action === 'get-teachers') {
       const teachersQuery = `
         SELECT userid, username, userlastname, email
@@ -96,7 +88,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(teachersResult.rows);
     }
 
-    // Update the groups query to properly join with User table and include track
     const groupQuery = `
       WITH group_members AS (
         SELECT 
@@ -160,13 +151,11 @@ export async function GET(req: NextRequest) {
       ORDER BY g.groupname;
     `;
 
-    // Fix the response handling to ensure we return an array
     if (subject) {
       try {
         const groupResult = await client.query(groupQuery, [subject]);
         
         const formattedRows = groupResult.rows.map(row => {
-          // Ensure teachers and students are arrays, even if null/undefined
           const teachers = Array.isArray(row.teachers) ? row.teachers : [];
           const students = Array.isArray(row.students) ? row.students : [];
           
@@ -182,29 +171,26 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(formattedRows);
       } catch (error) {
-        console.error('Database error:', error);
+        console.error('ข้อผิดพลาดฐานข้อมูล:', error);
         return NextResponse.json([]); 
       }
     }
 
-    // Return empty array if no subject is selected
     return NextResponse.json([]);
 
   } catch (error) {
-    console.error('Database error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('ข้อผิดพลาดฐานข้อมูล:', error);
+    return NextResponse.json({ error: 'ข้อผิดพลาดภายในเซิร์ฟเวอร์' }, { status: 500 });
   } finally {
     client.release();
   }
 }
 
-// Update POST method to handle student IDs as text
 interface GroupMember {
   studentId: string;
-  teacher?: string;  // Changed from advisor
+  teacher?: string;
 }
 
-// Update the POST method to properly handle empty student slots
 export async function POST(request: Request) {
   const { subjectId, groups } = await request.json();
   const client = await pool.connect();
@@ -216,12 +202,10 @@ export async function POST(request: Request) {
     const groupName = group.groupName;
     const projectName = group.projectName;
 
-    // Process members...
     const memberIds = (group.members || [])
       .map(m => m.studentId ? m.studentId.replace(/[^0-9]/g, '') : null)
       .filter((id): id is string => id !== null && id.length === 10);
 
-    // Check for existing group
     const existingGroup = await client.query(
       `SELECT groupid, projectname FROM "Group" 
        WHERE groupname = $1 AND subject = $2 AND deleted IS NULL`,
@@ -229,7 +213,6 @@ export async function POST(request: Request) {
     );
 
     if (existingGroup.rows.length > 0) {
-      // Update existing group, keeping project name if not provided
       await client.query(
         `UPDATE "Group" 
          SET "User" = $1::character varying[],
@@ -242,12 +225,11 @@ export async function POST(request: Request) {
           memberIds,
           group.teachers || [],
           group.note || null,
-          projectName, // Will keep existing value if projectName is null
+          projectName,
           existingGroup.rows[0].groupid
         ]
       );
     } else if (memberIds.length > 0) {
-      // Insert new group
       await client.query(
         `INSERT INTO "Group" (
           groupname, 
@@ -273,22 +255,20 @@ export async function POST(request: Request) {
 
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error saving group:', error);
-    return NextResponse.json({ error: 'Failed to save group' }, { status: 500 });
+    console.error('ข้อผิดพลาดในการบันทึกกลุ่ม:', error);
+    return NextResponse.json({ error: 'ไม่สามารถบันทึกกลุ่มได้' }, { status: 500 });
   } finally {
     client.release();
   }
 }
 
-// Update PUT endpoint to handle string array
 export async function PUT(request: Request) {
   const { groupId, students } = await request.json();
 
   if (!groupId || !Array.isArray(students)) {
-    return NextResponse.json({ error: 'Group ID and students array are required' }, { status: 400 });
+    return NextResponse.json({ error: 'กรุณาระบุ ID กลุ่มและรายชื่อนักศึกษา' }, { status: 400 });
   }
 
-  // Remove dashes and skip empty
   const studentIds = students
     .map((id: string) => id.replace(/\D/g, ''))
     .filter((id) => id);
@@ -305,31 +285,29 @@ export async function PUT(request: Request) {
     const result = await client.query(updateQuery, [studentIds, groupId]);
     
     if (result.rowCount === 0) {
-      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      return NextResponse.json({ error: 'ไม่พบกลุ่ม' }, { status: 404 });
     }
 
     return NextResponse.json(result.rows[0]);
   } catch (error) {
-    console.error('Database error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('ข้อผิดพลาดฐานข้อมูล:', error);
+    return NextResponse.json({ error: 'ข้อผิดพลาดภายในเซิร์ฟเวอร์' }, { status: 500 });
   } finally {
     client.release();
   }
 }
 
-// Add PATCH method for transferring groups between subjects
 export async function PATCH(request: Request) {
   const { sourceSubjectId, targetSubjectId } = await request.json();
   
   if (!sourceSubjectId || !targetSubjectId) {
-    return NextResponse.json({ error: 'Source and target subject IDs are required' }, { status: 400 });
+    return NextResponse.json({ error: 'กรุณาระบุรหัสวิชาต้นทางและปลายทาง' }, { status: 400 });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
-    // Get all groups from source subject
     const getGroupsQuery = `
       SELECT groupid, projectname, groupname, "User", teacher, note
       FROM "Group"
@@ -337,9 +315,7 @@ export async function PATCH(request: Request) {
     `;
     const groupsResult = await client.query(getGroupsQuery, [sourceSubjectId]);
     
-    // For each group, create a new one in the target subject
     for (const group of groupsResult.rows) {
-      // Check if group with same name already exists in target subject
       const checkExistingQuery = `
         SELECT groupid 
         FROM "Group" 
@@ -348,7 +324,6 @@ export async function PATCH(request: Request) {
       const existingResult = await client.query(checkExistingQuery, [targetSubjectId, group.groupname]);
       
       if (existingResult.rows.length > 0) {
-        // Update existing group
         await client.query(
           `UPDATE "Group"
            SET "User" = $1::character varying[],
@@ -360,7 +335,6 @@ export async function PATCH(request: Request) {
           [group.User, group.teacher, group.note, group.projectname, existingResult.rows[0].groupid]
         );
       } else {
-        // Create new group
         await client.query(
           `INSERT INTO "Group" (
             groupname, 
@@ -378,12 +352,12 @@ export async function PATCH(request: Request) {
     await client.query('COMMIT');
     return NextResponse.json({ 
       success: true, 
-      message: `Successfully transferred ${groupsResult.rows.length} groups from subject ${sourceSubjectId} to subject ${targetSubjectId}`
+      message: `โอนย้าย ${groupsResult.rows.length} กลุ่มจากรายวิชา ${sourceSubjectId} ไปยังรายวิชา ${targetSubjectId} เรียบร้อยแล้ว`
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error transferring groups:', error);
-    return NextResponse.json({ error: 'Failed to transfer groups' }, { status: 500 });
+    console.error('ข้อผิดพลาดในการโอนย้ายกลุ่ม:', error);
+    return NextResponse.json({ error: 'ไม่สามารถโอนย้ายกลุ่มได้' }, { status: 500 });
   } finally {
     client.release();
   }

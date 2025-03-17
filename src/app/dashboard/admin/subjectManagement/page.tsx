@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation'; 
 import Link from 'next/link';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -15,6 +15,36 @@ import NotificationDropdown from '@/components/NotificationDropdown';
 const TransitionLayout = dynamic(() => import('../../../../components/TransitionLayout'), {
   ssr: false
 });
+
+const SearchInput = React.memo(({ 
+  value, 
+  onChange 
+}: { 
+  value: string; 
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      placeholder="ค้นหารายวิชา..."
+      value={value}
+      onChange={onChange}
+      className="border border-gray-200 rounded px-3 py-2 w-full focus:outline-none focus:ring-0 focus:border-gray-300"
+      autoFocus
+    />
+  );
+});
+
+SearchInput.displayName = 'SearchInput';
 
 const SubjectManagement: React.FC = () => {
   const router = useRouter();
@@ -34,11 +64,18 @@ const SubjectManagement: React.FC = () => {
       Web: 0,
     },
   });
+  
+  // สร้าง array ปีการศึกษาสำหรับ dropdown (ปีปัจจุบัน +/- 5 ปี)
+  const yearOptions = Array.from({ length: 11 }, (_, i) => 
+    (currentYear - 5 + i).toString()
+  );
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const searchTimeout = useRef<NodeJS.Timeout>();
 
   const fetchSubjects = useCallback(async () => {
     try {
@@ -52,7 +89,7 @@ const SubjectManagement: React.FC = () => {
   
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch subjects');
+        throw new Error(error.error || 'ไม่สามารถดึงข้อมูลรายวิชาได้');
       }
   
       const data = await response.json();
@@ -101,7 +138,7 @@ const SubjectManagement: React.FC = () => {
     e.preventDefault();
     
     if (!user?.id) {
-      alert('Please log in again to continue');
+      alert('กรุณาเข้าสู่ระบบใหม่เพื่อดำเนินการต่อ');
       return;
     }
 
@@ -127,7 +164,7 @@ const SubjectManagement: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create subject');
+        throw new Error(errorData.error || 'ไม่สามารถสร้างรายวิชาได้');
       }
 
       const addedSubject = await response.json();
@@ -145,24 +182,31 @@ const SubjectManagement: React.FC = () => {
       });
       setShowForm(false);
     } catch (error: any) {
-      console.error('Error creating subject:', error);
-      alert(`Failed to add subject: ${error.message}`);
+      console.error('เกิดข้อผิดพลาดในการสร้างรายวิชา:', error);
+      alert(`เพิ่มวิชาไม่ได้: ${error.message}`);
     }
   };
 
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+    
+    searchTimeout.current = setTimeout(() => {
+      setDebouncedSearchTerm(value);
+    }, 300);
   }, []);
 
-  const SearchInput = React.memo(() => (
-    <input
-      type="text"
-      placeholder="Search subjects..."
-      value={searchTerm}
-      onChange={handleSearch}
-      className="border rounded px-3 py-2 w-full"
-    />
-  ));
+  useEffect(() => {
+    return () => {
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+      }
+    };
+  }, []);
 
   const filteredSubjects = React.useMemo(() => {
     if (!Array.isArray(subjects)) return [];
@@ -171,7 +215,7 @@ const SubjectManagement: React.FC = () => {
 
       const matchesName = subject.subject_name
         ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
+        .includes(debouncedSearchTerm.toLowerCase());
 
       const matchesSubject = subjectFilter
         ? subject.subject_name.toLowerCase().includes(subjectFilter.toLowerCase())
@@ -181,7 +225,7 @@ const SubjectManagement: React.FC = () => {
 
       return matchesName && matchesSubject && matchesYear;
     });
-  }, [subjects, searchTerm, subjectFilter, yearFilter]);
+  }, [subjects, debouncedSearchTerm, subjectFilter, yearFilter]);
 
 const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   const { user } = useAuth();
@@ -204,7 +248,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
+            <span className="ml-4 text-xl font-medium text-blue-600">ระบบตรวจสอบเอกสาร IT</span>
           </div>
           <div className="relative flex items-center space-x-4">
             <NotificationDropdown />
@@ -221,7 +265,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
                   onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 hover:bg-gray-100"
                 >
-                  Logout
+                  ออกจากระบบ
                 </button>
               </div>
             )}
@@ -242,7 +286,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                   bg-white w-64 border-r border-blue-100 transition-transform duration-300 ease-in-out z-30`}>
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-blue-600">Menu</h2>
+        <h2 className="text-xl font-semibold text-blue-600">เมนู</h2>
         <button onClick={closeSidebar} className="text-gray-500 hover:text-gray-700">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -253,17 +297,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
         <Link href="/dashboard/admin/subjectManagement" 
           className="flex items-center px-4 py-3 text-blue-600 bg-blue-50 rounded-xl">
           <FontAwesomeIcon icon={faBook} className="w-5 h-5 mr-3" />
-          Subjects
+          รายวิชา
         </Link>
         <Link href="/dashboard/admin/userManagement" 
           className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
           <FontAwesomeIcon icon={faUserGraduate} className="w-5 h-5 mr-3" />
-          Users
+          ผู้ใช้
         </Link>
         <Link href="/dashboard/admin/groupManagement" 
           className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
           <FontAwesomeIcon icon={faUser} className="w-5 h-5 mr-3" />
-          Group
+          กลุ่ม
         </Link>
       </nav>
     </div>
@@ -276,7 +320,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="animate-spin rounded-full border-b-4 border-blue-500 h-16 w-16 mb-4"></div>
-        <p className="text-xl">Loading...</p>
+        <p className="text-xl">กำลังโหลด...</p>
       </div>
     );
   }
@@ -292,20 +336,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
           />
         )}
 
-      <main className="pt-20 pb-16 px-4"></main>
       <main className="pt-20 pb-16 px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-200/50 p-6 mb-6">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg p-6 mb-6">
             <div className="flex flex-wrap gap-4">
-              <SearchInput />
+              <SearchInput value={searchTerm} onChange={handleSearch} />
             
               <select
                 className="md:w-48 px-3 py-2 border border-gray-200 rounded-lg
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           focus:outline-none focus:ring-0 focus:border-gray-300"
                 value={yearFilter}
                 onChange={(e) => setYearFilter(e.target.value)}
               >
-                <option value="">All Years</option>
+                <option value="">ทุกปีการศึกษา</option>
                 {availableYears.map(year => (
                   <option key={year} value={year}>
                     {parseInt(year) + 543}
@@ -325,7 +368,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                               hover:shadow-md transition-shadow duration-200 border border-blue-100">
                   <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-400 p-6">
                     <h3 className="text-xl font-medium text-white">{subject.subject_name}</h3>
-                    <p className="text-blue-100 text-sm mt-1">Section {subject.section}</p>
+                    <p className="text-blue-100 text-sm mt-1">เซคชั่น {subject.section}</p>
                   </div>
                   <div className="p-4">
                     <div className="flex items-center text-sm text-blue-600">
@@ -362,8 +405,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
           <div className="relative min-h-screen flex items-center justify-center p-4">
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl overflow-hidden">
               <div className="bg-blue-600 p-6">
-                <h2 className="text-2xl font-bold text-white">Create New Subject</h2>
-                <p className="text-blue-100 mt-1">Add a new subject to your educational program</p>
+                <h2 className="text-2xl font-bold text-white">สร้างรายวิชาใหม่</h2>
+                <p className="text-blue-100 mt-1">เพิ่มรายวิชาใหม่เข้าสู่โปรแกรมการศึกษา</p>
               </div>
 
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
@@ -371,7 +414,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Subject Name
+                        ชื่อรายวิชา
                       </label>
                       <input
                         type="text"
@@ -381,7 +424,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                         className="w-full px-4 py-2 rounded border border-gray-300
                                  focus:border-blue-500 focus:ring-1 focus:ring-blue-500
                                  transition-colors"
-                        placeholder="Enter subject name"
+                        placeholder="กรุณากรอกชื่อรายวิชา"
                       />
                     </div>
                   </div> 
@@ -390,7 +433,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Section
+                          เซคชั่น
                         </label>
                         <input
                           type="number"
@@ -405,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Semester
+                          ภาคเรียน
                         </label>
                         <select
                           name="subject_semester"
@@ -415,24 +458,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                                    focus:border-blue-500 focus:ring-1 focus:ring-blue-500
                                    transition-colors"
                         >
-                          <option value={1}>Semester 1</option>
-                          <option value={2}>Semester 2</option>
+                          <option value={1}>ภาคเรียนที่ 1</option>
+                          <option value={2}>ภาคเรียนที่ 2</option>
+                          <option value={3}>ภาคฤดูร้อน</option>
                         </select>
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Academic Year
+                        ปีการศึกษา
                       </label>
-                      <input
-                        type="text"
+                      <select
                         name="subject_year"
-                        value={parseInt(currentYear.toString()) + 543}
-                        readOnly
+                        value={newSubject.subject_year}
+                        onChange={handleChange}
                         className="w-full px-4 py-2 rounded border border-gray-300
-                                 bg-gray-50 text-gray-500 cursor-not-allowed"
-                      />
+                                 focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+                                 transition-colors"
+                      >
+                        {yearOptions.map(year => (
+                          <option key={year} value={year}>
+                            {parseInt(year) + 543} 
+                            {/* ({year}) */}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -445,14 +496,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                              text-gray-700 hover:bg-gray-50 
                              transition-colors text-sm font-medium"
                   >
-                    Cancel
+                    ยกเลิก
                   </button>
                   <button
                     type="submit"
                     className="px-6 py-2 rounded bg-blue-600 text-white 
                              hover:bg-blue-700 transition-colors text-sm font-medium"
                   >
-                    Create Subject
+                    สร้างรายวิชา
                   </button>
                 </div>
               </form>

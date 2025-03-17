@@ -1663,9 +1663,9 @@ useEffect(() => {
           <div className="bg-red-50 rounded-xl border border-red-100 p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-red-600">ส่งช้า</div>
+                <div className="text-sm text-red-600">ไม่ได้ส่ง</div>
                 <div className="text-3xl font-semibold text-red-700 mt-2">
-                  {dashboardData?.stats?.timeliness?.late || 0}
+                  {dashboardData?.stats?.notSubmittedGroups || 0}
                 </div>
               </div>
               <div className="rounded-full bg-red-100 p-3">
@@ -1675,22 +1675,32 @@ useEffect(() => {
               </div>
             </div>
             <div className="mt-4 text-sm text-red-600">
-              {Math.round((dashboardData?.stats?.timeliness?.late || 0) / 
-              ((dashboardData?.stats?.timeliness?.onTime || 0) + (dashboardData?.stats?.timeliness?.late || 0) || 1) * 100) || 0}% ของการส่งทั้งหมด
+              {Math.round((dashboardData?.stats?.notSubmittedGroups || 0) / 
+              (dashboardData?.stats?.totalGroups || 1) * 100) || 0}% ของกลุ่มทั้งหมด
             </div>
           </div>
 
           <div className="bg-purple-50 rounded-xl border border-purple-100 p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-purple-600">ไฟล์ใหญ่สุด</div>
+                <div>
+                <div className="text-sm text-purple-600">อัตราการทำงาน</div>
                 <div className="text-3xl font-semibold text-purple-700 mt-2">
-                  {dashboardData?.stats?.fileSizes?.[0]?.size.toFixed(1) || 0} MB
+                  {Math.round((dashboardData?.stats?.submittedGroups / dashboardData?.stats?.totalGroups || 0) * 100)}%
                 </div>
+                </div>
+              <div className="rounded-full bg-purple-100 p-3">
+                <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
+            </div>
+            <div className="mt-4 text-sm text-purple-600">
+              หลังจากมอบหมายงาน
             </div>
           </div>
         </div>
+     
+
      
         <div className="bg-white rounded-xl shadow p-6">
           <h3 className="text-lg font-medium mb-4">ไทม์ไลน์การส่งงาน</h3>
@@ -1706,15 +1716,8 @@ useEffect(() => {
                     backgroundColor: 'rgba(34, 197, 94, 0.1)',
                     fill: true,
                     tension: 0.4
-                  },
-                  {
-                    label: 'ส่งช้า',
-                    data: dashboardData.stats.timeline.late,
-                    borderColor: 'rgb(239, 68, 68)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    fill: true,
-                    tension: 0.4
                   }
+                 
                 ]
               }}
               options={{
@@ -1782,7 +1785,7 @@ useEffect(() => {
                           : 'bg-red-100 text-red-800'}`}>
                         {new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
                           ? 'ตรงเวลา' 
-                          : 'ส่งช้า'}
+                          : 'ไม่ได้ส่ง'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
