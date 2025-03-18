@@ -248,7 +248,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span className="ml-4 text-xl font-medium text-blue-600">ระบบตรวจสอบเอกสาร IT</span>
+            <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
           </div>
           <div className="relative flex items-center space-x-4">
             <NotificationDropdown />

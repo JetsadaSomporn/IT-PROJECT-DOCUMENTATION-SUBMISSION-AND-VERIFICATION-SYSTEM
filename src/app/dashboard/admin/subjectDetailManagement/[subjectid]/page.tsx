@@ -415,15 +415,31 @@ const EditSubjectModal = ({
             <div>
               <label className="block mb-2 font-medium">ปีการศึกษา</label>
               <input
-                type="text"
-                name="subject_year"
-                value={editForm.subject_year}
-                onChange={handleChange}
-                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              type="text"
+              name="subject_year"
+              value={editForm.subject_year ? 
+                (isNaN(parseInt(editForm.subject_year)) ? '' : (parseInt(editForm.subject_year) + 543).toString()) : 
+                ''}
+              onChange={(e) => {
+                const buddhistYear = e.target.value;
+                
+                let gregorianYear = '';
+                if (buddhistYear && !isNaN(parseInt(buddhistYear))) {
+                  gregorianYear = (parseInt(buddhistYear) - 543).toString();
+                }
+                handleChange({
+                target: {
+                  name: 'subject_year',
+                  value: gregorianYear
+                }
+                } as React.ChangeEvent<HTMLInputElement>);
+              }}
+              className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500"
+              placeholder="ปี พ.ศ."
               />
             </div>
             <div>
-              <label className="block mb-2 font-medium">หมู่เรียน</label>
+              <label className="block mb-2 font-medium">เซคชั่น</label>
               <input
                 type="number"
                 name="section"
@@ -1616,29 +1632,50 @@ useEffect(() => {
     ) : dashboardData ? (
       <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
-                <div className="text-3xl font-semibold mt-2">
-                  {dashboardData?.stats?.submittedGroups || 0}
-                </div>
+              <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
+              <div className="text-3xl font-semibold mt-2">
+                {dashboardData?.stats?.submittedGroups || 0}
+              </div>
               </div>
               <div className="rounded-full bg-blue-50 p-3">
-                <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
               </div>
             </div>
             <div className="flex justify-between items-center mt-4 text-sm">
               <div className="text-green-600">
-                <span className="font-medium">{dashboardData?.stats?.submittedGroups || 0}</span> กลุ่มส่งแล้ว
+              <span className="font-medium">{dashboardData?.stats?.submittedGroups || 0}</span> กลุ่มส่งแล้ว
               </div>
               <div className="text-red-600">
-                <span className="font-medium">{dashboardData?.stats?.notSubmittedGroups || 0}</span> กลุ่มยังไม่ส่ง
+              <span className="font-medium">{dashboardData?.stats?.notSubmittedGroups || 0}</span> กลุ่มยังไม่ส่ง
               </div>
             </div>
-          </div>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-sm text-blue-600 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {(() => {
+                const now = new Date();
+                const dueDate = new Date(dashboardData?.assignment?.assignment_due_date || new Date());
+                const diffTime = dueDate.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) {
+                return <span className="font-medium">หมดเวลา</span>;
+                } else if (diffDays === 0) {
+                return <span className="font-medium">หมดเวลาวันนี้</span>;
+                } else {
+                return <span className="font-medium">เหลือเวลาอีก {diffDays} วัน</span>;
+                }
+              })()}
+              </div>
+            </div>
+            </div>
 
           <div className="bg-green-50 rounded-xl border border-green-100 p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
@@ -1674,6 +1711,7 @@ useEffect(() => {
                 </svg>
               </div>
             </div>
+
             <div className="mt-4 text-sm text-red-600">
               {Math.round((dashboardData?.stats?.notSubmittedGroups || 0) / 
               (dashboardData?.stats?.totalGroups || 1) * 100) || 0}% ของกลุ่มทั้งหมด
@@ -1698,6 +1736,29 @@ useEffect(() => {
               หลังจากมอบหมายงาน
             </div>
           </div>
+
+          
+          {/* <div className="bg-amber-50 rounded-xl border border-amber-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-amber-600">เวลาการส่งงาน</div>
+                <div className="text-3xl font-semibold text-amber-700 mt-2">
+                  {dashboardData?.stats?.averageSubmissionTime 
+                    ? `${Math.round(dashboardData.stats.averageSubmissionTime / 3600)} ชั่วโมง` 
+                    : 'N/A'}
+                </div>
+              </div>
+              <div className="rounded-full bg-amber-100 p-3">
+                <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-amber-600">
+              เวลาเฉลี่ยที่ใช้ในการส่งงานหลังมอบหมาย
+            </div>
+          </div> */}
+
         </div>
      
 
