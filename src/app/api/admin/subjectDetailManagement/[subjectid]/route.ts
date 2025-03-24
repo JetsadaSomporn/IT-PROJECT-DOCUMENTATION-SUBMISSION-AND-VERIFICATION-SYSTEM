@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../auth/[...nextauth]/route';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -151,6 +153,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
             g.projectname,
             (ass.pdf->>'file_name') as file_name,
             (ass.pdf->>'file_path') as file_path,
+            (ass.pdf->'validations') as file_validations,
             CASE
               WHEN ass.pdf->>'file_size' ~ '^[0-9]+(\.[0-9]+)?$' THEN (ass.pdf->>'file_size')::numeric
               WHEN ass.pdf->>'file_size' ~ '.*MB.*' THEN REPLACE(REPLACE(ass.pdf->>'file_size', 'MB', ''), ' ', '')::numeric
@@ -344,7 +347,8 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
               file_name: sub.file_name,
               file_path: sub.file_path,
               file_size: sub.file_size,
-              uploaded_by: sub.pdf.uploaded_by
+              uploaded_by: sub.pdf.uploaded_by,
+              validations: sub.file_validations
             }
           })),
           submittedGroups: submittedGroupsDetails,
@@ -1346,8 +1350,188 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
         }
       }
 
+      if (action === 'reupload-submission') {
+        try {
+          const formData = await request.formData();
+          const file = formData.get('file') as File;
+          const submissionId = formData.get('submissionId');
+          const assignmentId = formData.get('assignmentId');
+          const groupName = formData.get('groupName');
+          
+          if (!file || !submissionId || !assignmentId) {
+            return NextResponse.json({ 
+              error: 'ข้อมูลไม่ครบถ้วน กรุณาระบุไฟล์และข้อมูลการส่งงาน', 
+              success: false 
+            }, { status: 400 });
+          }
+          
+          if (file.type !== 'application/pdf') {
+            return NextResponse.json({ 
+              error: 'รองรับเฉพาะไฟล์ PDF เท่านั้น', 
+              success: false 
+            }, { status: 400 });
+          }
+          
+          const session = await getServerSession(authOptions);
+          if (!session || !session.user || !session.user.id) {
+            return NextResponse.json({ 
+              error: 'กรุณาเข้าสู่ระบบก่อนดำเนินการ', 
+              success: false 
+            }, { status: 401 });
+          }
+          
+          // Validate the file size (max 15MB)
+          const MAX_SIZE = 15 * 1024 * 1024; // 15MB in bytes
+          if (file.size > MAX_SIZE) {
+            return NextResponse.json({
+              error: `ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 15MB) ขนาดปัจจุบัน: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+              success: false
+            }, { status: 400 });
+          }
+          
+          try {
+            // First, get the existing submission to preserve any relevant data
+            const existingSubmission = await client.query(
+              `SELECT * FROM "Assignment_Sent" WHERE assignment_sent_id = $1`,
+              [submissionId]
+            );
+            
+            if (existingSubmission.rowCount === 0) {
+              return NextResponse.json({ 
+                error: 'ไม่พบข้อมูลการส่งงานที่ต้องการแก้ไข', 
+                success: false 
+              }, { status: 404 });
+            }
+            
+            // Ensure the uploads directory exists
+            const publicDir = path.join(process.cwd(), 'public');
+            const uploadsDir = path.join(publicDir, 'uploads');
+            
+            if (!fs.existsSync(publicDir)) {
+              fs.mkdirSync(publicDir, { recursive: true });
+            }
+            
+            if (!fs.existsSync(uploadsDir)) {
+              fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+            
+            // Generate a unique filename
+            const fileExt = '.pdf';
+            const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+            const fileName = `reupload_${uniqueId}${fileExt}`;
+            const filePath = path.join(uploadsDir, fileName);
+            
+            try {
+              // Convert the file to an ArrayBuffer and save it
+              const bytes = await file.arrayBuffer();
+              const buffer = Buffer.from(bytes);
+              fs.writeFileSync(filePath, buffer);
+              
+              // Verify the file was successfully saved
+              if (!fs.existsSync(filePath)) {
+                throw new Error('ไม่สามารถบันทึกไฟล์ได้');
+              }
+              
+              // Get the file size in KB after saving
+              const stats = fs.statSync(filePath);
+              const fileSizeKB = (stats.size / 1024).toFixed(1);
+              
+              // Database file path (relative to public directory)
+              const dbFilePath = `/uploads/${fileName}`;
+              
+              // Update the submission with the new file
+              const updatedPdf = {
+                file_name: file.name || `reuploaded_document_${uniqueId}.pdf`,
+                file_path: dbFilePath,
+                file_size: `${fileSizeKB}KB`,
+                file_url: dbFilePath,
+                uploaded_by: session.user.id,
+                validations: {
+                  file_corrupted: false,
+                  signature_missing: false
+                }
+              };
+              
+              await client.query('BEGIN');
+              
+              // Update the record in the database
+              const updateResult = await client.query(
+                `UPDATE "Assignment_Sent" 
+                  SET pdf = $1::jsonb, updated = CURRENT_TIMESTAMP
+                  WHERE assignment_sent_id = $2
+                  RETURNING *`,
+                [JSON.stringify(updatedPdf), submissionId]
+              );
+              
+              if (updateResult.rowCount === 0) {
+                // Roll back transaction but don't delete the file yet - it's already saved
+                await client.query('ROLLBACK');
+                throw new Error('ไม่สามารถอัปเดตข้อมูลการส่งงานได้');
+              }
+              
+              // Skip Activity_Log since the table doesn't exist
+              // Instead, just log to console for debugging
+              console.log('Reupload action:', {
+                user_id: session.user.id,
+                action_type: 'reupload',
+                entity_type: 'assignment_sent',
+                entity_id: submissionId,
+                details: {
+                  assignment_id: assignmentId,
+                  file_name: file.name || `reuploaded_document_${uniqueId}.pdf`,
+                  group_name: groupName || 'Unknown group',
+                  reason: 'Admin reupload'
+                }
+              });
+              
+              await client.query('COMMIT');
+              
+              // Return success with file information
+              return NextResponse.json({ 
+                success: true, 
+                message: 'อัปโหลดไฟล์สำเร็จ',
+                file: {
+                  name: file.name || `reuploaded_document_${uniqueId}.pdf`,
+                  path: dbFilePath,
+                  size: `${fileSizeKB}KB`
+                }
+              });
+            } catch (error) {
+              // Handle file operation errors
+              console.error('Error processing file:', error);
+              
+              // Try to clean up the file if it was created
+              try {
+                if (fs.existsSync(filePath)) {
+                  fs.unlinkSync(filePath);
+                }
+              } catch (cleanupError) {
+                console.error('Error cleaning up file after failed upload:', cleanupError);
+              }
+              
+              throw error; // Re-throw to be caught by outer catch block
+            }
+            
+          } catch (error) {
+            if (client.queryQueue?.length > 0) {
+              await client.query('ROLLBACK').catch(e => console.error('Error rolling back transaction:', e));
+            }
+            console.error('Error in database operations:', error);
+            return NextResponse.json({ 
+              error: error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์',
+              success: false
+            }, { status: 500 });
+          }
+        } catch (error) {
+          console.error('Error handling file reupload:', error);
+          return NextResponse.json({ 
+            error: 'เกิดข้อผิดพลาดในการประมวลผลคำขออัปโหลดไฟล์',
+            success: false
+          }, { status: 500 });
+        }
+      }
 
-      // get subject from Subject_Available
+     
       const subjectResult = await pool.query(
         'SELECT * FROM "Subject_Available" WHERE subjectid = $1 AND deleted IS NULL',
         [parsedSubjectId]

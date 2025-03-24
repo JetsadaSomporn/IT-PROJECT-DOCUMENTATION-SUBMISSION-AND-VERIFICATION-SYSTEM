@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import TabTransition from '@/components/TabTransition';
@@ -46,6 +46,9 @@ interface Assignment {
   created: string;
   updated: string;
   deleted: string | null;
+  section: number;
+  subject_semester: number;
+  subject_year: string;
   doc_verification?: { 
     [key: string]: {
       checked: boolean;
@@ -79,7 +82,8 @@ interface ValidateItem {
   };
 }
 
-// Header component matching admin view
+// Header component (copied from admin UI)
+// Edit buttons have been removed so teachers cannot modify any data.
 const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   const { user } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
@@ -118,7 +122,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   );
 };
 
-// Sidebar component matching admin view
+// Sidebar component (copied from admin UI)
 const Sidebar = ({ isSidebarOpen, closeSidebar }: { isSidebarOpen: boolean; closeSidebar: () => void }) => (
   <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                   bg-white w-64 border-r border-blue-100 transition-transform duration-300 ease-in-out z-30`}>
@@ -148,20 +152,18 @@ const Sidebar = ({ isSidebarOpen, closeSidebar }: { isSidebarOpen: boolean; clos
   </div>
 );
 
+// AssignmentDetailModal (copied from admin UI with no editing controls)
 const AssignmentDetailModal = ({ 
   isOpen, 
   onClose, 
-  assignment
+  assignment 
 }: { 
   isOpen: boolean;
   onClose: () => void;
   assignment: Assignment | null;
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'dashboard'>('details');
-
   if (!assignment) return null;
-
-  // Get requirements from the first validate item if it exists
   const requirements = assignment.validates?.[0]?.requirements || {};
 
   return (
@@ -173,17 +175,16 @@ const AssignmentDetailModal = ({
     >
       <div className="min-h-screen">
         <div className="h-[70px]"></div>
-        
         {/* Header */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-2xl font-semibold text-gray-900">
-                  {assignment?.assignment_name}
+                  {assignment.assignment_name}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  กำหนดส่ง {new Date(assignment?.assignment_due_date || '').toLocaleDateString('th-TH')}
+                  กำหนดส่ง {new Date(assignment.assignment_due_date).toLocaleDateString('th-TH')}
                 </p>
               </div>
               <button
@@ -195,8 +196,7 @@ const AssignmentDetailModal = ({
                 </svg>
               </button>
             </div>
-
-            {/* Tabs */}
+            {/* Tabs (read-only) */}
             <div className="flex space-x-6 mt-6">
               {['รายละเอียด', 'การส่งงาน'].map((tab) => {
                 const tabKey = tab === 'รายละเอียด' ? 'details' : 'dashboard';
@@ -216,7 +216,6 @@ const AssignmentDetailModal = ({
             </div>
           </div>
         </div>
-
         {/* Content */}
         <div className="max-w-7xl mx-auto px-6 py-8">
           {activeTab === 'details' ? (
@@ -241,7 +240,6 @@ const AssignmentDetailModal = ({
                   </div>
                 </div>
               </div>
-
               <div>
                 <div className="bg-gray-50 rounded-xl p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-4">ข้อกำหนดเอกสาร</h4>
@@ -290,7 +288,6 @@ const AssignmentDetailModal = ({
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -301,7 +298,7 @@ const AssignmentDetailModal = ({
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {assignment?.validates?.map((validate) => (
+                    {assignment?.validates?.map(validate => (
                       <tr key={validate.student_id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{validate.student_id}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -325,7 +322,7 @@ const AssignmentDetailModal = ({
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer: Only a "Close" button is provided */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
         <div className="max-w-7xl mx-auto flex justify-end">
           <button
@@ -340,6 +337,7 @@ const AssignmentDetailModal = ({
   );
 };
 
+// Main SubjectDetailView component (read-only, copied from admin UI)
 const SubjectDetailView: React.FC = () => {
   const { subjectid } = useParams();
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -354,9 +352,9 @@ const SubjectDetailView: React.FC = () => {
   useEffect(() => {
     if (!subjectid) return;
     fetch(`/api/teacher/subjectDetailView/${subjectid}`)
-      .then((res) => res.json())
-      .then((data) => { setSubject(data); setLoading(false); })
-      .catch((err) => { setError(err.message); setLoading(false); });
+      .then(res => res.json())
+      .then(data => { setSubject(data); setLoading(false); })
+      .catch(err => { setError(err.message); setLoading(false); });
   }, [subjectid]);
 
   const fetchAssignments = useCallback(async () => {
@@ -366,7 +364,6 @@ const SubjectDetailView: React.FC = () => {
         throw new Error('Failed to fetch assignments');
       }
       const data = await response.json();
-      console.log('Fetched assignments:', data);
       setAssignments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching assignments:', err);
@@ -388,11 +385,9 @@ const SubjectDetailView: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={() => setIsSidebarOpen(false)} />
       <Header openSidebar={() => setIsSidebarOpen(true)} />
-      
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20" onClick={() => setIsSidebarOpen(false)} />
       )}
-
       <main className="pt-24 pb-16 px-4 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <nav className="mb-8 flex items-center space-x-2 text-sm">
@@ -429,21 +424,14 @@ const SubjectDetailView: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
             <div className="border-b border-gray-200">
               <nav className="px-6 -mb-px flex space-x-4">
-                {['นักศึกษา', 'อาจารย์', 'งาน'].map((tab) => {
-                  const tabKey = {
-                    'นักศึกษา': 'students',
-                    'อาจารย์': 'teachers',
-                    'งาน': 'tasks'
-                  }[tab];
-                  
+                {['นักศึกษา', 'อาจารย์', 'งาน'].map(tab => {
+                  const tabKey = { 'นักศึกษา': 'students', 'อาจารย์': 'teachers', 'งาน': 'tasks' }[tab];
                   return (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tabKey as 'students' | 'teachers' | 'tasks')}
                       className={`py-4 px-4 text-sm font-medium border-b-2 transition-colors
-                        ${activeTab === tabKey
-                          ? 'border-blue-600 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                        ${activeTab === tabKey ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                     >
                       {tab}
                     </button>
@@ -454,24 +442,24 @@ const SubjectDetailView: React.FC = () => {
 
             <div className="p-6">
               <TabTransition isVisible={activeTab === 'students'}>
-                {/* Students list */}
+                {/* ...existing students list UI... */}
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           รหัสนักศึกษา
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           ชื่อ
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           อีเมล
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {subject?.students.map((student) => (
+                      {subject?.students.map(student => (
                         <tr key={student.student_id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {student.student_id}
@@ -490,9 +478,9 @@ const SubjectDetailView: React.FC = () => {
               </TabTransition>
 
               <TabTransition isVisible={activeTab === 'teachers'}>
-                {/* Teachers list */}
+                {/* ...existing teachers list UI... */}
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {subject?.teachers?.map((teacher) => (
+                  {subject?.teachers?.map(teacher => (
                     <div key={teacher.userid} className="bg-gray-50 rounded-lg p-4">
                       <div className="font-medium">{`${teacher.username} ${teacher.userlastname}`}</div>
                       <div className="text-sm text-gray-500">{teacher.email}</div>
@@ -502,55 +490,32 @@ const SubjectDetailView: React.FC = () => {
               </TabTransition>
 
               <TabTransition isVisible={activeTab === 'tasks'}>
+                {/* ...existing assignments UI from admin with assignment detail modal shown in read-only mode... */}
                 <div className="space-y-4">
-                  {assignments.map((assignment) => (
-                    <div
+                  {assignments.map(assignment => (
+                    <Link 
                       key={assignment.assignmentid}
-                      className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow-md"
+                      href="#"
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setIsAssignmentDetailOpen(true);
+                      }}
+                      className="group"
                     >
-                      <div className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start space-x-4">
-                            <div className="mt-1">
-                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-900">
-                                {assignment.assignment_name}
-                              </h3>
-                              <div className="mt-1 text-sm text-gray-500">
-                                กำหนดส่ง: {new Date(assignment.assignment_due_date).toLocaleDateString('th-TH')}
-                              </div>
-                              {assignment.assignment_description && (
-                                <p className="mt-3 text-sm text-gray-600">
-                                  {assignment.assignment_description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                      <div className="bg-gradient-to-br from-white to-blue-50 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-200 border border-blue-100">
+                        <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-400 p-6">
+                          <h3 className="text-xl font-medium text-white">{assignment.assignment_name}</h3>
+                          <p className="text-blue-100 text-sm mt-1">Section {assignment.section}</p>
                         </div>
-                        <div className="mt-4 flex items-center justify-between border-t pt-4">
-                          <div className="flex items-center space-x-4">
-                            <span className="text-sm text-gray-500">
-                              {assignment.validates?.length || 0} การส่ง
-                            </span>
+                        <div className="p-4">
+                          <div className="flex items-center text-sm text-blue-600">
+                            <span>ภาคเรียน {assignment.subject_semester}</span>
+                            <span className="mx-2">•</span>
+                            <span>ปีการศึกษา {assignment.subject_year}</span>
                           </div>
-                          <button
-                            onClick={() => {
-                              setSelectedAssignment(assignment);
-                              setIsAssignmentDetailOpen(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          >
-                            ดูรายละเอียด
-                          </button>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </TabTransition>

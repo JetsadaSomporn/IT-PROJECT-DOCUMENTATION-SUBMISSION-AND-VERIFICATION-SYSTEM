@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBook, faUser, faClipboard } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { signOut } from 'next-auth/react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 const TeacherSubjectView: React.FC = () => {
   const router = useRouter();
@@ -60,6 +61,7 @@ const TeacherSubjectView: React.FC = () => {
             <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
           </div>
           <div className="flex items-center space-x-4">
+            <NotificationDropdown />
             <span className="text-sm text-gray-600">{user?.name}</span>
             <button
               onClick={() => signOut()}
@@ -136,8 +138,8 @@ const TeacherSubjectView: React.FC = () => {
                 className="border rounded px-3 py-2"
               >
                 <option value="">All Years</option>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
+                <option value="2023">2566</option>
+                <option value="2024">2567</option>
               </select>
             </div>
           </div>
@@ -160,7 +162,7 @@ const TeacherSubjectView: React.FC = () => {
                     <div className="flex items-center text-sm text-blue-600">
                       <span>ภาคเรียน {subject.subject_semester}</span>
                       <span className="mx-2">•</span>
-                      <span>ปีการศึกษา {subject.subject_year}</span>
+                      <span>ปีการศึกษา {parseInt(subject.subject_year, 10) + 543}</span>
                     </div>
                   </div>
                 </div>

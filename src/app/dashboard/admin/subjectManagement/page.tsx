@@ -368,7 +368,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                               hover:shadow-md transition-shadow duration-200 border border-blue-100">
                   <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-400 p-6">
                     <h3 className="text-xl font-medium text-white">{subject.subject_name}</h3>
-                    <p className="text-blue-100 text-sm mt-1">เซคชั่น {subject.section}</p>
+                    <p className="text-blue-100 text-sm mt-1">กลุ่มเรียน {subject.section}</p>
                   </div>
                   <div className="p-4">
                     <div className="flex items-center text-sm text-blue-600">
@@ -433,7 +433,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          เซคชั่น
+                          กลุ่มเรียน
                         </label>
                         <input
                           type="number"

@@ -823,7 +823,7 @@ const showTrackInfo = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {currentSubject?.subject_name} - เซคชั่น {currentSubject?.section}
+              {currentSubject?.subject_name} - กลุ่มเรียน {currentSubject?.section}
             </h1>
             <div className="flex space-x-6 text-sm text-gray-600">
               <span>ปีการศึกษา {currentSubject?.subject_year}</span>
@@ -1199,7 +1199,7 @@ const createEmptyGroupSlots = (track: TrackType) => {
               <option value="">เลือกรายวิชา</option>
               {subjects.map((subject) => (
                 <option key={subject.subjectid} value={subject.subjectid}>
-                  {subject.subject_name} - เซคชั่น {subject.section}
+                  {subject.subject_name} - กลุ่มเรียน {subject.section}
                 </option>
               ))}
             </select>

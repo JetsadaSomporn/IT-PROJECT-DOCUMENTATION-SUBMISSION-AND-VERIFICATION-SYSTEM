@@ -439,7 +439,7 @@ const EditSubjectModal = ({
               />
             </div>
             <div>
-              <label className="block mb-2 font-medium">เซคชั่น</label>
+              <label className="block mb-2 font-medium">กลุ่มเรียน</label>
               <input
                 type="number"
                 name="section"
@@ -1466,6 +1466,112 @@ useEffect(() => {
   }
 }, [activeTab, assignment]);
 
+  const [isReuploadModalOpen, setIsReuploadModalOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleReupload = (submission: any) => {
+    setSelectedSubmission(submission);
+    setIsReuploadModalOpen(true);
+  };
+
+
+  const submitReupload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fileInputRef.current?.files?.length || !selectedSubmission) return;
+    
+    const file = fileInputRef.current.files[0];
+    
+    
+    if (file.type !== 'application/pdf') {
+      alert('รองรับเฉพาะไฟล์ PDF เท่านั้น');
+      return;
+    }
+    
+    
+    const MAX_SIZE = 15 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert(`ไฟล์มีขนาดใหญ่เกินไป สูงสุด 15MB ขนาดของคุณ: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+      return;
+    }
+    
+    try {
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('submissionId', selectedSubmission.assignment_sent_id);
+      formData.append('assignmentId', assignment?.assignmentid?.toString() || '');
+      formData.append('groupName', selectedSubmission.group_name || '');
+      
+      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=reupload-submission`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'อัปโหลดไฟล์ไม่สำเร็จ');
+      }
+      
+      // Update the submission in the local state
+      const updatedSubmissions = dashboardData.submissions.map((sub: any) => {
+        if (sub.assignment_sent_id === selectedSubmission.assignment_sent_id) {
+          return {
+            ...sub,
+            pdf: {
+              ...sub.pdf,
+              file_name: result.file.name,
+              file_path: result.file.path,
+              file_size: result.file.size,
+              validations: {
+                file_corrupted: false,
+                signature_missing: false
+              }
+            },
+            updated: new Date().toISOString()
+          };
+        }
+        return sub;
+      });
+      
+      setDashboardData({
+        ...dashboardData,
+        submissions: updatedSubmissions
+      });
+      
+      setIsReuploadModalOpen(false);
+      alert('อัปโหลดไฟล์สำเร็จ');
+    } catch (error) {
+      console.error('Error reuploading file:', error);
+      alert(`อัปโหลดไฟล์ไม่สำเร็จ: ${error instanceof Error ? error.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  
+  const getFileIssue = (submission: any) => {
+    if (!submission.pdf?.validations) return null;
+    
+    if (submission.pdf.validations.file_corrupted) {
+      return {
+        text: 'ไฟล์เสียหาย',
+        className: 'bg-red-100 text-red-800'
+      };
+    }
+    
+    if (submission.pdf.validations.signature_missing) {
+      return {
+        text: 'ไม่มีลายเซ็น',
+        className: 'bg-amber-100 text-amber-800'
+      };
+    }
+    
+    return null;
+  };
+
   return (
     
     <Modal
@@ -1813,54 +1919,98 @@ useEffect(() => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาที่ส่ง</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ไฟล์</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ดำเนินการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {dashboardData.submissions?.map((sub: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {sub.username} {sub.userlastname}
+                {dashboardData.submissions?.map((sub: any, idx: number) => {
+                  const fileIssue = getFileIssue(sub);
+                  
+                  return (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {sub.username} {sub.userlastname}
+                          </div>
+                          <div className="text-sm text-gray-500">{sub.email}</div>
                         </div>
-                        <div className="text-sm text-gray-500">{sub.email}</div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {sub.group_name || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="text-sm text-gray-900">
-                          {new Date(sub.created).toLocaleDateString('th-TH')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {sub.group_name || '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="text-sm text-gray-900">
+                            {new Date(sub.created).toLocaleDateString('th-TH')}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(sub.created).toLocaleTimeString('th-TH')}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(sub.created).toLocaleTimeString('th-TH')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col space-y-1">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            ${new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'}`}>
+                            {new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
+                              ? 'ตรงเวลา' 
+                              : 'ส่งช้า'}
+                          </span>
+                          
+                          {fileIssue && (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${fileIssue.className}`}>
+                              {fileIssue.text}
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'}`}>
-                        {new Date(sub.created) <= new Date(dashboardData.assignment.assignment_due_date) 
-                          ? 'ตรงเวลา' 
-                          : 'ไม่ได้ส่ง'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                          {sub.pdf.file_name}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-blue-600 truncate max-w-xs">
+                            <a 
+                              href={sub.pdf.file_path} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="hover:underline"
+                            >
+                              {sub.pdf.file_name}
+                            </a>
+                          </div>
+                         
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {parseFloat(sub.pdf.file_size).toFixed(1)} MB
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center space-x-3">
+                          <a 
+                            href={sub.pdf.file_path}
+                            download={sub.pdf.file_name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            ดาวน์โหลด
+                          </a>
+                          
+                          <button
+                            onClick={() => handleReupload(sub)}
+                            className="text-orange-600 hover:text-orange-800 text-sm flex items-center"
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            อัปโหลด
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1871,6 +2021,89 @@ useEffect(() => {
     )}
   </div>
 )}
+
+        {/* File Reupload Modal */}
+        <Modal
+          isOpen={isReuploadModalOpen}
+          onRequestClose={() => !uploadingFile && setIsReuploadModalOpen(false)}
+          className="fixed inset-0 flex items-center justify-center p-4 z-50"
+          overlayClassName="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">อัปโหลดไฟล์ใหม่</h2>
+              {!uploadingFile && (
+                <button
+                  onClick={() => setIsReuploadModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {selectedSubmission && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">กำลังแทนที่ไฟล์สำหรับ:</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="font-medium">{selectedSubmission.group_name || 'กลุ่มไม่ทราบชื่อ'}</p>
+                  <p className="text-sm text-gray-500">ไฟล์เดิม: {selectedSubmission.pdf.file_name}</p>
+                </div>
+              </div>
+            )}
+            
+            <form onSubmit={submitReupload}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  เลือกไฟล์ PDF ใหม่
+                </label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="application/pdf"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={uploadingFile}
+                  required
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  ไฟล์ต้องเป็น PDF และมีขนาดไม่เกิน 15MB
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
+                {!uploadingFile && (
+                  <button
+                    type="button"
+                    onClick={() => setIsReuploadModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  >
+                    ยกเลิก
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={uploadingFile}
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg 
+                    ${uploadingFile
+                      ? 'bg-blue-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'}`}
+                >
+                  {uploadingFile ? (
+                    <div className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      กำลังอัปโหลด...
+                    </div>
+                  ) : 'อัปโหลดไฟล์'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
 
         </div>
 
