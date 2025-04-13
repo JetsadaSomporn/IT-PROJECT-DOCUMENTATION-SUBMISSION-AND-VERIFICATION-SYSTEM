@@ -65,7 +65,7 @@ const SubjectManagement: React.FC = () => {
     },
   });
   
-  // สร้าง array ปีการศึกษาสำหรับ dropdown (ปีปัจจุบัน +/- 5 ปี)
+  
   const yearOptions = Array.from({ length: 11 }, (_, i) => 
     (currentYear - 5 + i).toString()
   );
@@ -237,6 +237,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   
   return (
     <header className="bg-white shadow-md fixed w-full z-10 border-b border-blue-100">
+      <title> รายวิชาทั้งหมด</title>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">

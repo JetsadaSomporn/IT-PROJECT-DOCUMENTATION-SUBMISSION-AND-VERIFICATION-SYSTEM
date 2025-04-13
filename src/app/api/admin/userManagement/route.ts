@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'ไม่ได้รับการยืนยันตัวตน' }, { status: 401 });
+      return NextResponse.json([], { status: 401 }); // Return empty array instead of error object
     }
 
     const { searchParams } = new URL(request.url);
@@ -21,6 +21,7 @@ export async function GET(request: Request) {
 
     const client = await pool.connect();
     try {
+     
       let query = `
         SELECT DISTINCT
           u.userid,
@@ -33,12 +34,13 @@ export async function GET(request: Request) {
             (
               SELECT array_agg(s.subject_name)
               FROM "Subject_Available" s
-              WHERE s.students @> ARRAY[u.userid::text]
+              WHERE s.students::text LIKE '%' || u.userid || '%'
+              AND s.deleted IS NULL
             ),
             ARRAY[]::text[]
           ) as enrolled_subjects
         FROM "User" u
-        WHERE 1=1
+        WHERE u.deleted IS NULL
       `;
 
       const values: any[] = [];
@@ -57,38 +59,59 @@ export async function GET(request: Request) {
       }
 
       if (subject) {
-        query += ` AND EXISTS (
-          SELECT 1 
-          FROM "Subject_Available" s 
-          WHERE s.subject_name ILIKE $${paramCount}
-          AND s.students @> ARRAY[u.userid::text]
-        )`;
-        values.push(`%${subject}%`);
-        paramCount++;
+        
+        const getSubjectQuery = `SELECT subject_name FROM "Subject_Available" WHERE subjectid = $1 AND deleted IS NULL`;
+        const subjectResult = await client.query(getSubjectQuery, [subject]);
+        if (subjectResult.rows.length > 0) {
+          const subjectName = subjectResult.rows[0].subject_name;
+          query += ` AND EXISTS (
+            SELECT 1
+            FROM "Subject_Available" s
+            WHERE s.subject_name = $${paramCount}
+            AND s.students::text LIKE '%' || u.userid || '%'
+            AND s.deleted IS NULL
+          )`;
+          values.push(subjectName);
+          paramCount++;
+        }
       }
 
       query += ' ORDER BY u.username';
 
       const result = await client.query(query, values);
 
-      const users = result.rows.map(user => ({
-        id: user.userid,
-        name: user.username,
-        lastName: user.userlastname, 
-        email: user.email,
-        userType: Array.isArray(user.usertype) ? user.usertype : [user.usertype],
-        track: user.track,
-        Subject_Available: user.enrolled_subjects || []
-      }));
+      
+      if (!result || !result.rows) {
+        console.error('Invalid query result:', result);
+        return NextResponse.json([]); 
+      }
+
+      const users = result.rows.map(user => {
+        
+        const enrolledSubjects = Array.isArray(user.enrolled_subjects) ? user.enrolled_subjects : [];
+        
+        return {
+          id: user.userid || '',
+          name: user.username || '',
+          lastName: user.userlastname || '', 
+          email: user.email || '',
+          userType: Array.isArray(user.usertype) ? user.usertype : [user.usertype || ''],
+          track: user.track || '',
+          Subject_Available: enrolledSubjects
+        };
+      });
 
       return NextResponse.json(users);
 
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      return NextResponse.json([]); 
     } finally {
       client.release();
     }
   } catch (error) {
     console.error('ข้อผิดพลาดฐานข้อมูล:', error);
-    return NextResponse.json({ error: 'ไม่สามารถดึงข้อมูลผู้ใช้ได้' }, { status: 500 });
+    return NextResponse.json([]); 
   }
 }
 

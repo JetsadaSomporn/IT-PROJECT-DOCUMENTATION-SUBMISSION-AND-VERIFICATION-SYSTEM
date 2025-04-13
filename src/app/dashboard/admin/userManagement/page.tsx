@@ -8,11 +8,13 @@ import {
   faUserGraduate, 
   faFilter, 
   faSearch, 
-  faUser
+  faUser,
+  faBell
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'next-auth/react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface User {
   id: string;
@@ -56,9 +58,10 @@ const Header: React.FC<{ openSidebar: () => void }> = ({ openSidebar }) => {
             <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
           </div>
           <div className="relative flex items-center space-x-4">
+            <NotificationDropdown />
             <div className="text-sm text-gray-600">{user?.name || 'ผู้ใช้'}</div>
             <button
-              onClick={() => setShowLogout(prev => !prev)}
+              onClick={() => setShowLogout(!showLogout)}
               className="w-8 h-8 rounded-full bg-blue-600 text-white"
             >
               {user?.name?.[0] || 'ผ'}
@@ -150,9 +153,18 @@ const UserManagement: React.FC = () => {
           cache: 'no-store',
           credentials: 'include' 
         });
+        
+        if (!res.ok) {
+          console.error('Failed to fetch users:', res.statusText);
+          setUsers([]);
+          return;
+        }
+        
         const data = await res.json();
         
+        // Always check if it's an array before processing
         if (Array.isArray(data)) {
+          console.log("Loaded users sample:", data.slice(0, 2));
           setUsers(data);
         } else {
           console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
@@ -166,7 +178,7 @@ const UserManagement: React.FC = () => {
 
     const fetchSubjects = async () => {
       try {
-        const response = await fetch('/api/admin/subjectManagement', {
+        const response = await fetch('/api/admin/subjects', {
           credentials: 'include'
         });
         
@@ -187,7 +199,7 @@ const UserManagement: React.FC = () => {
       fetchUsers();
       fetchSubjects();
     } else {
-      console.log('การเข้าถึงถูกปฏิเสธ: ไม่ใช่ผู้ใช้ที่เป็นผู้ดูแลระบบ');
+      console.log('การเข้าถึงถูกปฏิเศธ: ไม่ใช่ผู้ใช้ที่เป็นผู้ดูแลระบบ');
       router.push('/unauthorized');
     }
   }, [user, isLoading, router]);
@@ -203,10 +215,21 @@ const UserManagement: React.FC = () => {
     const matchesType = filters.type === 'all' || user.type.includes(filters.type);
     const matchesStatus = filters.status === 'all' || user.status === filters.status;
     const matchesUserType = userTypeFilter === 'all' || user.userType.includes(userTypeFilter);
-    const matchesSubject = !selectedSubject || 
-      (user.Subject_Available && user.Subject_Available.some(subject => 
-        subject.includes(subjects.find(s => s.subjectid === selectedSubject)?.subject_name || '')
-      ));
+    
+    // FIX HERE: Simplified subject matching logic that directly compares with subject name
+    let matchesSubject = true;
+    if (selectedSubject && selectedSubject.trim() !== '') {
+      matchesSubject = false;
+      
+      if (user.Subject_Available && Array.isArray(user.Subject_Available)) {
+        for (const userSubject of user.Subject_Available) {
+          if (userSubject && userSubject.toLowerCase() === selectedSubject.toLowerCase()) {
+            matchesSubject = true;
+            break;
+          }
+        }
+      }
+    }
     
     return matchesSearch && matchesType && matchesStatus && matchesUserType && matchesSubject;
   });
@@ -247,7 +270,7 @@ const UserManagement: React.FC = () => {
   );
 
   const TableRow: React.FC<{ user: User }> = ({ user }) => (
-    <tr className="hover:bg-gray-50">
+    <tr key={user.id} className="hover:bg-gray-50">
       <td className="px-6 py-4 whitespace-nowrap">{user.id}</td>
       <td className="px-6 py-4 whitespace-nowrap">
         {editingUser === user.id ? (
@@ -300,90 +323,9 @@ const UserManagement: React.FC = () => {
     </tr>
   );
 
-  const FilterModal = () => (
-    <AnimatePresence>
-      {filterOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
-          onClick={() => setFilterOpen(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-6 w-full max-w-md m-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <h2 className="text-xl font-semibold mb-4">ตัวกรอง</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))}
-                  className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
-                >
-                  <option value="all">ทั้งหมด</option>
-                  <option value="active">ใช้งาน</option>
-                  <option value="inactive">ไม่ได้ใช้งาน</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ประเภทผู้ใช้</label>
-                <select
-                  value={userTypeFilter}
-                  onChange={(e) => setUserTypeFilter(e.target.value as 'all' | 'student' | 'teacher' | 'admin')}
-                  className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
-                >
-                  <option value="all">ผู้ใช้ทั้งหมด</option>
-                  <option value="teacher">อาจารย์</option>
-                  <option value="student">นักศึกษา</option>
-                  <option value="admin">ผู้ดูแลระบบ</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">รายวิชา</label>
-                <select
-                  value={selectedSubject}
-                  onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="w-full rounded-lg border-gray-200 focus:ring-blue-500"
-                >
-                  <option value="">ทุกรายวิชา</option>
-                  {subjects.map(subject => (
-                    <option key={subject.subjectid} value={subject.subjectid}>
-                      {subject.subject_name} (กลุ่ม {subject.section})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => setFilterOpen(false)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={() => {
-                  setFilters({ status: 'all', type: 'all' });
-                  setUserTypeFilter('all');
-                  setSelectedSubject('');
-                  setFilterOpen(false);
-                }}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-              >
-                ล้างตัวกรอง
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  const activeFiltersCount = 
+    (selectedSubject ? 1 : 0) + 
+    (userTypeFilter !== 'all' ? 1 : 0);
 
   const handleDelete = async (userId: string) => {
     try {
@@ -416,6 +358,7 @@ const UserManagement: React.FC = () => {
     <AnimatePresence>
       {isDeleteModalOpen && userToDelete && (
         <motion.div
+          key="delete-modal" 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -457,6 +400,7 @@ const UserManagement: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={closeSidebar} />
       <Header openSidebar={() => setIsSidebarOpen(true)} />
+
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20"
@@ -464,6 +408,7 @@ const UserManagement: React.FC = () => {
         />
       )}
       <main className="pt-24 pb-16 px-4">
+      <title> จัดการผู้ใช้</title>
         <div className="max-w-7xl mx-auto">
           <div className="bg-white shadow-sm rounded-lg overflow-hidden">
             <div className="p-6 border-b border-gray-200">
@@ -511,7 +456,9 @@ const UserManagement: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="flex gap-2 ml-auto order-1 sm:order-2">
+                {/* Search and Filter Group - Exact clone from userView */}
+                <div className="flex items-center gap-2 ml-auto order-1 sm:order-2">
+                  {/* Search */}
                   <div className="relative">
                     <input
                       type="text"
@@ -525,16 +472,87 @@ const UserManagement: React.FC = () => {
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                     />
                   </div>
-                  <button
-                    onClick={() => setFilterOpen(true)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center"
-                  >
-                    <FontAwesomeIcon icon={faFilter} className="mr-2" />
-                    ตัวกรอง
-                    {(selectedSubject || filters.status !== 'all' || filters.type !== 'all') && (
-                      <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></span>
-                    )}
-                  </button>
+                  
+                  {/* Filter Button */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => setFilterOpen(!filterOpen)} 
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 
+                        ${activeFiltersCount > 0 
+                          ? 'bg-blue-600 text-white shadow-sm' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      <FontAwesomeIcon icon={faFilter} className="mr-2" />
+                      ตัวกรอง {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+                    </button>
+                    
+                    {/* Filter Dropdown */}
+                    <AnimatePresence>
+                      {filterOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute right-0 mt-2 w-72 bg-white rounded-md shadow-lg z-20 p-4"
+                        >
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                ประเภทผู้ใช้
+                              </label>
+                              <select
+                                value={userTypeFilter}
+                                onChange={(e) => setUserTypeFilter(e.target.value as 'all' | 'student' | 'teacher' | 'admin')}
+                                className="w-full p-2 border border-gray-300 rounded-md"
+                              >
+                                <option value="all">ทั้งหมด</option>
+                                <option value="student">นักศึกษา</option>
+                                <option value="teacher">อาจารย์</option>
+                                <option value="admin">ผู้ดูแลระบบ</option>
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                วิชา
+                              </label>
+                              <select
+                                value={selectedSubject}
+                                onChange={(e) => setSelectedSubject(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-md"
+                              >
+                                <option value="">ทุกวิชา</option>
+                                {subjects.map(subject => (
+                                  <option key={subject.subjectid} value={subject.subject_name}>
+                                    {subject.subject_name} (กลุ่ม {subject.section})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div className="flex justify-between pt-2 border-t border-gray-200">
+                              <button 
+                                onClick={() => {
+                                  setFilters({ status: 'all', type: 'all' });
+                                  setUserTypeFilter('all');
+                                  setSelectedSubject('');
+                                }}
+                                className="text-sm text-gray-600 hover:text-gray-900"
+                              >
+                                รีเซ็ตตัวกรอง
+                              </button>
+                              <button 
+                                onClick={() => setFilterOpen(false)}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md"
+                              >
+                                เสร็จสิ้น
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </div>
@@ -559,7 +577,6 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       </main>
-      <FilterModal />
       <DeleteConfirmationModal />
     </div>
   );

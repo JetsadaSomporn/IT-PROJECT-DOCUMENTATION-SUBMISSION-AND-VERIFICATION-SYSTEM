@@ -207,13 +207,21 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           submittedGroups: submittedCount,
           notSubmittedGroups: notSubmittedCount,
           submissionRate: submittedCount / totalValidGroups || 0,
-          averageSubmissionHours: 0
+          averageSubmissionHours: 0,
+          fileQuality: {
+            corrupted: 0,
+            missingSignature: 0,
+            totalIssues: 0
+          }
         };
     
         // Track the earliest submission for each group
         const groupSubmissionMap: { [groupId: string]: { date: Date, isOnTime: boolean } } = {};
         
         // Process each submission to track by group and collect additional stats
+        let fileCorruptedCount = 0;
+        let fileMissingSignatureCount = 0;
+        
         submissions.forEach(sub => {
           const groupId = sub.group_id;
           const submitDate = new Date(sub.created);
@@ -301,6 +309,26 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           if (!groupSubmissionMap[groupId] || submitDate < groupSubmissionMap[groupId].date) {
             groupSubmissionMap[groupId] = { date: submitDate, isOnTime };
           }
+
+          // Count file quality issues
+          if (sub.file_validations) {
+            try {
+              const validations = typeof sub.file_validations === 'string'
+                ? JSON.parse(sub.file_validations)
+                : sub.file_validations;
+                
+              if (validations) {
+                if (validations.file_corrupted) {
+                  fileCorruptedCount++;
+                }
+                if (validations.signature_missing) {
+                  fileMissingSignatureCount++;
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing file validations:', e);
+            }
+          }
         });
     
         // Now count timeliness based on the earliest submission for each group
@@ -337,6 +365,13 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         stats.timeline.dates = sortedIndices.map(i => stats.timeline.dates[i]);
         stats.timeline.onTime = sortedIndices.map(i => stats.timeline.onTime[i]);
         stats.timeline.late = sortedIndices.map(i => stats.timeline.late[i]);
+
+        // Update the stats with the file quality information
+        stats.fileQuality = {
+          corrupted: fileCorruptedCount,
+          missingSignature: fileMissingSignatureCount,
+          totalIssues: fileCorruptedCount + fileMissingSignatureCount
+        };
     
         return NextResponse.json({
           assignment,
@@ -1325,7 +1360,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
       
             await client.query('COMMIT');
       
-            // Transform response to include doc_verification
+            
             const updatedAssignment = {
               ...result.rows[0],
               doc_verification: result.rows[0].validates?.[0]?.requirements || {}
@@ -1380,8 +1415,8 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
             }, { status: 401 });
           }
           
-          // Validate the file size (max 15MB)
-          const MAX_SIZE = 15 * 1024 * 1024; // 15MB in bytes
+       
+          const MAX_SIZE = 15 * 1024 * 1024;
           if (file.size > MAX_SIZE) {
             return NextResponse.json({
               error: `ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 15MB) ขนาดปัจจุบัน: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
@@ -1390,7 +1425,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
           }
           
           try {
-            // First, get the existing submission to preserve any relevant data
+          
             const existingSubmission = await client.query(
               `SELECT * FROM "Assignment_Sent" WHERE assignment_sent_id = $1`,
               [submissionId]
@@ -1403,7 +1438,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               }, { status: 404 });
             }
             
-            // Ensure the uploads directory exists
+           
             const publicDir = path.join(process.cwd(), 'public');
             const uploadsDir = path.join(publicDir, 'uploads');
             
@@ -1415,31 +1450,30 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               fs.mkdirSync(uploadsDir, { recursive: true });
             }
             
-            // Generate a unique filename
+            
             const fileExt = '.pdf';
             const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
             const fileName = `reupload_${uniqueId}${fileExt}`;
             const filePath = path.join(uploadsDir, fileName);
             
             try {
-              // Convert the file to an ArrayBuffer and save it
+             
               const bytes = await file.arrayBuffer();
               const buffer = Buffer.from(bytes);
               fs.writeFileSync(filePath, buffer);
               
-              // Verify the file was successfully saved
               if (!fs.existsSync(filePath)) {
                 throw new Error('ไม่สามารถบันทึกไฟล์ได้');
               }
               
-              // Get the file size in KB after saving
+        
               const stats = fs.statSync(filePath);
               const fileSizeKB = (stats.size / 1024).toFixed(1);
               
-              // Database file path (relative to public directory)
+             
               const dbFilePath = `/uploads/${fileName}`;
               
-              // Update the submission with the new file
+              
               const updatedPdf = {
                 file_name: file.name || `reuploaded_document_${uniqueId}.pdf`,
                 file_path: dbFilePath,
@@ -1454,7 +1488,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               
               await client.query('BEGIN');
               
-              // Update the record in the database
+              
               const updateResult = await client.query(
                 `UPDATE "Assignment_Sent" 
                   SET pdf = $1::jsonb, updated = CURRENT_TIMESTAMP
@@ -1469,8 +1503,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
                 throw new Error('ไม่สามารถอัปเดตข้อมูลการส่งงานได้');
               }
               
-              // Skip Activity_Log since the table doesn't exist
-              // Instead, just log to console for debugging
+           
               console.log('Reupload action:', {
                 user_id: session.user.id,
                 action_type: 'reupload',
@@ -1486,7 +1519,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               
               await client.query('COMMIT');
               
-              // Return success with file information
+             
               return NextResponse.json({ 
                 success: true, 
                 message: 'อัปโหลดไฟล์สำเร็จ',
@@ -1497,10 +1530,10 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
                 }
               });
             } catch (error) {
-              // Handle file operation errors
+              
               console.error('Error processing file:', error);
               
-              // Try to clean up the file if it was created
+              
               try {
                 if (fs.existsSync(filePath)) {
                   fs.unlinkSync(filePath);
@@ -1513,8 +1546,11 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
             }
             
           } catch (error) {
-            if (client.queryQueue?.length > 0) {
-              await client.query('ROLLBACK').catch(e => console.error('Error rolling back transaction:', e));
+            
+            try {
+              await client.query('ROLLBACK');
+            } catch (e) {
+              console.error('Error rolling back transaction:', e);
             }
             console.error('Error in database operations:', error);
             return NextResponse.json({ 

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -39,7 +39,7 @@ ChartJS.register(
   Legend
 );
 
-// Add this custom CSS near the top of your file
+
 const datePickerStyles = `
   .react-datepicker {
     font-family: 'Inter', -apple-system, sans-serif;
@@ -130,7 +130,7 @@ const datePickerStyles = `
   }
 `;
 
-// Add this near the top of your file with the other CSS
+
 const timeInputStyles = `
   /* Force 24-hour display for time inputs */
   input[type="time"]::-webkit-datetime-edit-ampm-field {
@@ -248,7 +248,7 @@ type ValidationData = ValidateItem;
 
 const Header = ({ openSidebar }: { openSidebar: () => void }) => {
   const { user } = useAuth();
-  const [showLogout, setShowLogout] = useState(false); // Added state for menu visibility
+  const [showLogout, setShowLogout] = useState(false);
   
   const handleLogout = () => {
     signOut(); 
@@ -256,6 +256,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
 
   return (
     <header className="bg-white shadow-md fixed w-full z-10 border-b border-gray-200">
+      <title> รายละเอียดวิชา</title>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
@@ -328,7 +329,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen, closeSidebar }) => (
         <Link href="/dashboard/admin/groupManagement" 
           className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl">
           <FontAwesomeIcon icon={faUser} className="w-5 h-5 mr-3" />
-          กลุ่มเรียน
+          กลุ่ม
         </Link>
       </nav>
     </div>
@@ -473,11 +474,15 @@ const EditSubjectModal = ({
 
 const get = (url: string, opts?: any) => fetch(url, opts);
 
-const SubjectDetailManagement: React.FC = () => {
-  const params = useParams();
+const SubjectDetailManagement = ({ params }: { params: Promise<{ subjectid: string }> }) => {
+  const resolvedParams = React.use(params);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { subjectid } = params;
+  
+  const [isClient, setIsClient] = useState(false);
+  
+ 
+  const [currentDateTime, setCurrentDateTime] = useState('');
+  const [currentYear, setCurrentYear] = useState('');
   const [subject, setSubject] = useState<Subject | null>(() => ({
     subjectid: '',
     teachers: [],
@@ -587,7 +592,7 @@ const SubjectDetailManagement: React.FC = () => {
 
   const fetchSubject = async () => {
     try {
-      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}`, {
+      const response = await get(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -614,10 +619,10 @@ const SubjectDetailManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    if (subjectid) {
+    if (resolvedParams.subjectid) {
       fetchSubject();
     }
-  }, [subjectid]);
+  }, [resolvedParams.subjectid]);
 
   const normalizeText = (text: string): string => {
     return text
@@ -774,7 +779,7 @@ const SubjectDetailManagement: React.FC = () => {
         return;
       }
 
-      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=students`, {
+      const response = await get(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=students`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -811,7 +816,7 @@ const SubjectDetailManagement: React.FC = () => {
     }
   
     try {
-      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=remove-student`, {
+      const response = await get(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=remove-student`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -843,7 +848,7 @@ const SubjectDetailManagement: React.FC = () => {
 
   const handleSaveSubject = async (updatedSubject: any) => {
     try {
-      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=edit-subject`, {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=edit-subject`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -880,7 +885,7 @@ const SubjectDetailManagement: React.FC = () => {
 
   const handleTeacherSave = async () => {
     try {
-      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=manage-teacher`, {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=manage-teacher`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -890,20 +895,20 @@ const SubjectDetailManagement: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update teachers');
+        throw new Error('Failed to update teacher');
       }
 
       await fetchSubject();
       setIsTeacherSelectionOpen(false);
-      alert('Teachers updated successfully');
+      
     } catch (error: any) {
-      alert(`Failed to update teachers: ${error.message}`);
+      alert(`Failed to update teacher: ${error.message}`);
     }
   };
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=all-users`);
+      const res = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=all-users`);
       const data = await res.json();
       setAllUsers(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -930,6 +935,7 @@ const SubjectDetailManagement: React.FC = () => {
     }
   }, [activeTab]);
 
+  const searchParams = useSearchParams();
   const [autoOpenAssignmentId, setAutoOpenAssignmentId] = useState<number | null>(null);
   
   useEffect(() => {
@@ -945,7 +951,7 @@ const SubjectDetailManagement: React.FC = () => {
 
   const fetchAssignments = async () => {
     try {
-      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=all-assignments`, {
+      const response = await get(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=all-assignments`, {
         credentials: 'include',
       });
       
@@ -984,7 +990,7 @@ const fetchAllSubmissionStats = async (assignmentList: Assignment[]) => {
   try {
     const statsPromises = assignmentList.map(async (assignment) => {
       const response = await fetch(
-        `/api/admin/subjectDetailManagement/${subjectid}?action=submission-stats&assignmentId=${assignment.assignmentid}`,
+        `/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=submission-stats&assignmentId=${assignment.assignmentid}`,
         { 
           credentials: 'include',
           cache: 'no-store'
@@ -1083,7 +1089,7 @@ const handleCreateAssignment = async () => {
       documentVerification
     };
     const response = await get(
-      `/api/admin/subjectDetailManagement/${subjectid}?action=create-assignment`,
+      `/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=create-assignment`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1093,11 +1099,10 @@ const handleCreateAssignment = async () => {
     if (!response.ok) {
       throw new Error('Failed to create assignment');
     }
-
-    const createdAssignment: Assignment = await response.json();
-    setAssignments([...assignments, createdAssignment]);
+   
+    await fetchAssignments();
     closeFullScreenTaskForm();
-    alert('สร้างงานสำเร็จแล้ว');
+    
   } catch (err: any) {
     alert('สร้างงานไม่สำเร็จ');
   }
@@ -1105,7 +1110,7 @@ const handleCreateAssignment = async () => {
 
   const handleDeleteSubject = async () => {
     try {
-      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=delete-subject`, {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=delete-subject`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -1127,7 +1132,7 @@ const handleCreateAssignment = async () => {
 
   const handleDeleteAssignment = async (assignmentid: number) => {
     try {
-      const response = await get(`/api/admin/subjectDetailManagement/${subjectid}?action=delete-assignment`, {
+      const response = await get(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=delete-assignment`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -1450,7 +1455,7 @@ useEffect(() => {
       setIsLoadingDashboard(true);
       try {
         const response = await fetch(
-          `/api/admin/subjectDetailManagement/${subjectid}?action=dashboard-data&assignmentId=${assignment.assignmentid}`
+          `/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=dashboard-data&assignmentId=${assignment.assignmentid}`
         );
         if (!response.ok) throw new Error('Failed to fetch dashboard data');
         const data = await response.json();
@@ -1504,7 +1509,7 @@ useEffect(() => {
       formData.append('assignmentId', assignment?.assignmentid?.toString() || '');
       formData.append('groupName', selectedSubmission.group_name || '');
       
-      const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=reupload-submission`, {
+      const response = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=reupload-submission`, {
         method: 'POST',
         body: formData,
       });
@@ -1737,58 +1742,60 @@ useEffect(() => {
       </div>
     ) : dashboardData ? (
       <>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left Column - Submission Statistics */}
+          <div className="bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow h-full">
             <div className="flex items-center justify-between">
               <div>
-              <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
-              <div className="text-3xl font-semibold mt-2">
-                {dashboardData?.stats?.submittedGroups || 0}
-              </div>
+                <div className="text-sm text-gray-500">การส่งทั้งหมด</div>
+                <div className="text-3xl font-semibold mt-2">
+                  {dashboardData?.stats?.submittedGroups || 0}
+                </div>
               </div>
               <div className="rounded-full bg-blue-50 p-3">
-              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+                <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
             </div>
             <div className="flex justify-between items-center mt-4 text-sm">
               <div className="text-green-600">
-              <span className="font-medium">{dashboardData?.stats?.submittedGroups || 0}</span> กลุ่มส่งแล้ว
+                <span className="font-medium">{dashboardData?.stats?.submittedGroups || 0}</span> กลุ่มส่งแล้ว
               </div>
               <div className="text-red-600">
-              <span className="font-medium">{dashboardData?.stats?.notSubmittedGroups || 0}</span> กลุ่มยังไม่ส่ง
+                <span className="font-medium">{dashboardData?.stats?.notSubmittedGroups || 0}</span> กลุ่มยังไม่ส่ง
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-gray-100">
               <div className="text-sm text-blue-600 flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {(() => {
-                const now = new Date();
-                const dueDate = new Date(dashboardData?.assignment?.assignment_due_date || new Date());
-                const diffTime = dueDate.getTime() - now.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                if (diffDays < 0) {
-                return <span className="font-medium">หมดเวลา</span>;
-                } else if (diffDays === 0) {
-                return <span className="font-medium">หมดเวลาวันนี้</span>;
-                } else {
-                return <span className="font-medium">เหลือเวลาอีก {diffDays} วัน</span>;
-                }
-              })()}
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {(() => {
+                  const now = new Date();
+                  const dueDate = new Date(dashboardData?.assignment?.assignment_due_date || new Date());
+                  const diffTime = dueDate.getTime() - now.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  
+                  if (diffDays < 0) {
+                    return <span className="font-medium">หมดเวลา</span>;
+                  } else if (diffDays === 0) {
+                    return <span className="font-medium">หมดเวลาวันนี้</span>;
+                  } else {
+                    return <span className="font-medium">เหลือเวลาอีก {diffDays} วัน</span>;
+                  }
+                })()}
               </div>
             </div>
-            </div>
+          </div>
 
-          <div className="bg-green-50 rounded-xl border border-green-100 p-6 hover:shadow-lg transition-shadow">
+          {/* Middle Column - Completion Rate */}
+          <div className="bg-green-50 rounded-xl border border-green-100 p-6 hover:shadow-lg transition-shadow h-full">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-green-600">ส่งตรงเวลา</div>
+                <div className="text-sm text-green-600">ส่งงานแล้ว</div>
                 <div className="text-3xl font-semibold text-green-700 mt-2">
-                  {dashboardData?.stats?.timeliness?.onTime || 0}
+                  {dashboardData?.stats?.submittedGroups || 0}/{dashboardData?.stats?.totalGroups || 0}
                 </div>
               </div>
               <div className="rounded-full bg-green-100 p-3">
@@ -1797,76 +1804,78 @@ useEffect(() => {
                 </svg>
               </div>
             </div>
-            <div className="mt-4 text-sm text-green-600">
-              {Math.round((dashboardData?.stats?.timeliness?.onTime || 0) / 
-              ((dashboardData?.stats?.timeliness?.onTime || 0) + (dashboardData?.stats?.timeliness?.late || 0) || 1) * 100) || 0}% ของการส่งทั้งหมด
+            <div className="flex justify-between mt-4">
+              <div className="text-sm text-green-600">
+                อัตราการส่ง: <span className="font-medium">{Math.round((dashboardData?.stats?.submittedGroups / dashboardData?.stats?.totalGroups || 0) * 100)}%</span>
+              </div>
+              <div className="text-sm text-amber-600">
+                {dashboardData?.stats?.timeliness?.onTime || 0} ส่งตรงเวลา
+              </div>
+            </div>
+            <div className="mt-3 w-full bg-gray-200 rounded-full h-2.5">
+              <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${Math.round((dashboardData?.stats?.submittedGroups / dashboardData?.stats?.totalGroups || 0) * 100)}%` }}></div>
             </div>
           </div>
 
-          <div className="bg-red-50 rounded-xl border border-red-100 p-6 hover:shadow-lg transition-shadow">
+          {/* Right Column - File Quality */}
+          <div className="bg-blue-50 rounded-xl border border-blue-100 p-6 hover:shadow-lg transition-shadow h-full">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-red-600">ไม่ได้ส่ง</div>
-                <div className="text-3xl font-semibold text-red-700 mt-2">
-                  {dashboardData?.stats?.notSubmittedGroups || 0}
+                <div className="text-sm text-blue-600">คุณภาพไฟล์</div>
+                <div className="text-3xl font-semibold text-blue-700 mt-2">
+                  {(() => {
+                    const totalSubmitted = dashboardData?.stats?.submittedGroups || 0;
+                    const totalIssues = (
+                      (dashboardData?.stats?.fileQuality?.corrupted || 0) + 
+                      (dashboardData?.stats?.fileQuality?.missingSignature || 0)
+                    );
+                    const validFiles = totalSubmitted - totalIssues;
+                    return `${validFiles}/${totalSubmitted}`;
+                  })()}
                 </div>
               </div>
-              <div className="rounded-full bg-red-100 p-3">
-                <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div className="rounded-full bg-blue-100 p-3">
+                <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
             </div>
-
-            <div className="mt-4 text-sm text-red-600">
-              {Math.round((dashboardData?.stats?.notSubmittedGroups || 0) / 
-              (dashboardData?.stats?.totalGroups || 1) * 100) || 0}% ของกลุ่มทั้งหมด
-            </div>
-          </div>
-
-          <div className="bg-purple-50 rounded-xl border border-purple-100 p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-                <div>
-                <div className="text-sm text-purple-600">อัตราการทำงาน</div>
-                <div className="text-3xl font-semibold text-purple-700 mt-2">
-                  {Math.round((dashboardData?.stats?.submittedGroups / dashboardData?.stats?.totalGroups || 0) * 100)}%
+            <div className="flex justify-between mt-4"></div>
+              <div className="text-sm text-blue-600">
+                ไฟล์สมบูรณ์: <span className="font-medium">
+                  {(() => {
+                    const totalSubmitted = dashboardData?.stats?.submittedGroups || 0;
+                    const totalIssues = (
+                      (dashboardData?.stats?.fileQuality?.corrupted || 0) + 
+                      (dashboardData?.stats?.fileQuality?.missingSignature || 0)
+                    );
+                    const validFiles = totalSubmitted - totalIssues;
+                    const percentage = totalSubmitted > 0 ? Math.round((validFiles / totalSubmitted) * 100) : 0;
+                    return `${percentage}%`;
+                  })()}
+                </span>
+              </div>
+              <div className="flex flex-col items-end text-sm">
+                <div className="text-red-600">
+                  {dashboardData?.stats?.fileQuality?.corrupted || 0} ไฟล์เสียหาย
                 </div>
-                </div>
-              <div className="rounded-full bg-purple-100 p-3">
-                <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                {(dashboardData?.stats?.fileQuality?.missingSignature || 0) > 0 && (
+                  <div className="text-amber-600">
+                    {dashboardData?.stats?.fileQuality?.missingSignature || 0} ไม่มีลายเซ็น
+                  </div>
+                )}
               </div>
             </div>
-            <div className="mt-4 text-sm text-purple-600">
-              หลังจากมอบหมายงาน
-            </div>
           </div>
+        
+
+           
+
+
+
+           
 
           
-          {/* <div className="bg-amber-50 rounded-xl border border-amber-100 p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-amber-600">เวลาการส่งงาน</div>
-                <div className="text-3xl font-semibold text-amber-700 mt-2">
-                  {dashboardData?.stats?.averageSubmissionTime 
-                    ? `${Math.round(dashboardData.stats.averageSubmissionTime / 3600)} ชั่วโมง` 
-                    : 'N/A'}
-                </div>
-              </div>
-              <div className="rounded-full bg-amber-100 p-3">
-                <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-amber-600">
-              เวลาเฉลี่ยที่ใช้ในการส่งงานหลังมอบหมาย
-            </div>
-          </div> */}
-
-        </div>
-     
 
      
         <div className="bg-white rounded-xl shadow p-6">
@@ -2158,7 +2167,7 @@ useEffect(() => {
     const role = teacher.email?.endsWith('@kkumail.com')
       ? 'Teacher Assistant'
       : teacher.email?.endsWith('@kku.ac.th')
-      ? 'Teacher'
+      ? 'ผู้สอน'
       : 'No role';
   
     return (
@@ -2377,7 +2386,7 @@ useEffect(() => {
                   </button>
                   <button
                     onClick={() => {
-                      if (window.confirm('Are you sure you want to delete this subject? This action cannot be undone.')) {
+                      if (window.confirm('ยืนยันการลบรายวิชา')) {
                         handleDeleteSubject();
                       }
                     }}
@@ -2620,62 +2629,66 @@ useEffect(() => {
                       className="w-full border p-2 rounded"
                     />
                   </div>
-                  <div className="mb-4">
+                    <div className="mb-4">
                     <label className="block mb-2 font-medium">วันที่มอบหมาย</label>
                     <div className="flex gap-4">
                       <div className="flex-grow">
-                        <DatePicker
-                          selected={new Date(newAssignment.assignment_date)}
-                          onChange={(date) => setNewAssignment({
-                            ...newAssignment,
-                            assignment_date: date ? date.toISOString().split('T')[0] : ''
-                          })}
-                          dateFormat="MMMM d, yyyy"
-                          className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                          showMonthDropdown
-                          showYearDropdown
-                          dropdownMode="select"
-                          placeholderText="Select date"
-                        />
+                      <DatePicker
+                      selected={new Date(newAssignment.assignment_date)}
+                      onChange={(date) => setNewAssignment({
+                      ...newAssignment,
+                      assignment_date: date ? date.toISOString().split('T')[0] : ''
+                      })}
+                      dateFormat="d MMMM yyyy"
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                      showMonthDropdown
+                      showYearDropdown
+                      dropdownMode="select"
+                      placeholderText="เลือกวันที่"
+                      locale="th"
+                      formatWeekDay={day => day.substr(0, 1)}
+                      />
                       </div>
                       <TimeInput
-                        value={newAssignment.start_time || "00:00"}
-                        onChange={(e) => setNewAssignment({
-                          ...newAssignment,
-                          start_time: e.target.value
-                        })}
-                        className="w-[140px]"
+                      value={newAssignment.start_time || "00:00"}
+                      onChange={(e) => setNewAssignment({
+                      ...newAssignment,
+                      start_time: e.target.value
+                      })}
+                      className="w-[140px]"
                       />
                     </div>
-                  </div>
-                  <div className="mb-4">
+                    </div>
+                    <div className="mb-4">
                     <label className="block mb-2 font-medium">กำหนดส่ง</label>
                     <div className="flex gap-4">
                       <div className="flex-grow">
-                        <DatePicker
-                          selected={new Date(newAssignment.assignment_due_date)}
-                          onChange={(date) => setNewAssignment({
-                            ...newAssignment,
-                            assignment_due_date: date ? date.toISOString().split('T')[0] : ''
-                          })}
-                          dateFormat="MMMM d, yyyy"
-                          className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                          showMonthDropdown
-                          showYearDropdown
-                          dropdownMode="select"
-                          placeholderText="Select date"
-                        />
+                      <DatePicker
+                      selected={new Date(newAssignment.assignment_due_date)}
+                      onChange={(date) => setNewAssignment({
+                      ...newAssignment,
+                      assignment_due_date: date ? date.toISOString().split('T')[0] : ''
+                      })}
+                      dateFormat="d MMMM yyyy"
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                      showMonthDropdown
+                      showYearDropdown
+                      dropdownMode="select"
+                      placeholderText="เลือกวันที่"
+                      locale="th"
+                      formatWeekDay={day => day.substr(0, 1)}
+                      />
                       </div>
                       <TimeInput
-                        value={newAssignment.due_time || "23:59"}
-                        onChange={(e) => setNewAssignment({
-                          ...newAssignment,
-                          due_time: e.target.value
-                        })}
-                        className="w-[140px]"
+                      value={newAssignment.due_time || "23:59"}
+                      onChange={(e) => setNewAssignment({
+                      ...newAssignment,
+                      due_time: e.target.value
+                      })}
+                      className="w-[140px]"
                       />
                     </div>
-                  </div>
+                    </div>
                 </div>
 
                 <div>
@@ -2806,7 +2819,7 @@ useEffect(() => {
         assignment={selectedAssignment}
         onSave={async (updatedAssignment) => {
           try {
-            const response = await fetch(`/api/admin/subjectDetailManagement/${subjectid}?action=update-assignment`, {
+            const response = await fetch(`/api/admin/subjectDetailManagement/${resolvedParams.subjectid}?action=update-assignment`, {
               method: 'PUT',
               credentials: 'include',
               headers: {

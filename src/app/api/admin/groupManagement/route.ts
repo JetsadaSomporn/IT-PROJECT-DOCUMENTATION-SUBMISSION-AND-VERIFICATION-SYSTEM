@@ -78,8 +78,11 @@ export async function GET(req: NextRequest) {
       const teachersQuery = `
         SELECT userid, username, userlastname, email
         FROM "User"
-        WHERE (email LIKE '%@kku.ac.th' AND track = 'teacher')
-        OR type @> ARRAY['admin']::text[]
+        WHERE (
+          email LIKE '%@kku.ac.th' 
+          OR type @> ARRAY['admin']::text[]
+          OR track = 'teacher'
+        )
         AND deleted IS NULL
         ORDER BY username, userlastname;
       `;
@@ -202,8 +205,12 @@ export async function POST(request: Request) {
     const groupName = group.groupName;
     const projectName = group.projectName;
 
-    const memberIds = (group.members || [])
-      .map(m => m.studentId ? m.studentId.replace(/[^0-9]/g, '') : null)
+    interface GroupMemberInput {
+      studentId: string;
+      [key: string]: any; }
+
+    const memberIds: string[] = (group.members as GroupMemberInput[] || [])
+      .map((m: GroupMemberInput) => m.studentId ? m.studentId.replace(/[^0-9]/g, '') : null)
       .filter((id): id is string => id !== null && id.length === 10);
 
     const existingGroup = await client.query(
@@ -298,14 +305,50 @@ export async function PUT(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { sourceSubjectId, targetSubjectId } = await request.json();
-  
-  if (!sourceSubjectId || !targetSubjectId) {
-    return NextResponse.json({ error: 'กรุณาระบุรหัสวิชาต้นทางและปลายทาง' }, { status: 400 });
-  }
-
+  const requestData = await request.json();
   const client = await pool.connect();
+  
   try {
+    if (requestData.action === 'update-student-track') {
+      const { studentId, track } = requestData;
+      
+      if (!studentId || !track) {
+        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      }
+      
+      await client.query('BEGIN');
+      
+      // Update the track field in the User table
+      const updateQuery = `
+        UPDATE "User"
+        SET track = $1, updated = CURRENT_TIMESTAMP
+        WHERE userid = $2 AND deleted IS NULL
+        RETURNING userid, track
+      `;
+      
+      const result = await client.query(updateQuery, [track, studentId]);
+      
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+      }
+      
+      await client.query('COMMIT');
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: `Track for student ${studentId} updated to ${track}`,
+        data: result.rows[0]
+      });
+    }
+    
+    // Handle the existing group transfer functionality
+    const { sourceSubjectId, targetSubjectId } = requestData;
+  
+    if (!sourceSubjectId || !targetSubjectId) {
+      return NextResponse.json({ error: 'กรุณาระบุรหัสวิชาต้นทางและปลายทาง' }, { status: 400 });
+    }
+
     await client.query('BEGIN');
     
     const getGroupsQuery = `
@@ -356,8 +399,8 @@ export async function PATCH(request: Request) {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('ข้อผิดพลาดในการโอนย้ายกลุ่ม:', error);
-    return NextResponse.json({ error: 'ไม่สามารถโอนย้ายกลุ่มได้' }, { status: 500 });
+    console.error('ข้อผิดพลาดในการดำเนินการ:', error);
+    return NextResponse.json({ error: 'ไม่สามารถดำเนินการได้' }, { status: 500 });
   } finally {
     client.release();
   }

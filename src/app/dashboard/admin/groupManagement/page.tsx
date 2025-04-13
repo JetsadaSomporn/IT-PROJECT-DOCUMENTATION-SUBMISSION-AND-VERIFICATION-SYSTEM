@@ -10,6 +10,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import Modal from 'react-modal';
 import { signOut } from 'next-auth/react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface User {
   userid: string;
@@ -73,6 +74,7 @@ const Header = ({ openSidebar }: { openSidebar: () => void }) => {
             <span className="ml-4 text-xl font-medium text-blue-600">IT Document Verification</span>
           </div>
           <div className="relative flex items-center space-x-4">
+          <NotificationDropdown />
             <div className="text-sm text-gray-600">{user?.name || 'ผู้ใช้'}</div>
             <button onClick={() => setShowLogout(prev => !prev)} className="w-8 h-8 rounded-full bg-blue-600 text-white">
               {user?.name?.[0] || 'ผ'}
@@ -434,8 +436,29 @@ const GroupManagement: React.FC = () => {
   
       if (data) {
         const updatedStudents = [...students];
-        
-        const studentTrack = data.track || selectedTrack;
+      
+        let studentTrack = data.track || '';
+        if (selectedTrack === 'BIT' && (!studentTrack || studentTrack !== 'BIT')) {
+          
+          try {
+            const updateResponse = await fetch('/api/admin/groupManagement', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update-student-track',
+                studentId: normalizedId,
+                track: 'BIT'
+              }),
+            });
+            
+            if (updateResponse.ok) {
+              studentTrack = 'BIT';
+              console.log('Updated student track to BIT');
+            }
+          } catch (err) {
+            console.error('Error updating student track:', err);
+          }
+        }
   
         if (selectedTrack !== 'ALL' && studentTrack && studentTrack !== selectedTrack) {
           alert(`ข้อผิดพลาด: นักศึกษานี้อยู่ในแทร็ค ${studentTrack} ไม่สามารถเพิ่มเข้ากลุ่มแทร็ค ${selectedTrack} ได้`);
@@ -456,7 +479,7 @@ const GroupManagement: React.FC = () => {
             semester: selectedSubject ? 
               subjects.find(sub => sub.subjectid === selectedSubject)?.subject_semester || '' 
               : '',
-            track: studentTrack,
+            track: studentTrack || selectedTrack,
             teacher: '',
             note: ''
           };
@@ -567,7 +590,29 @@ const stuInput = async (value: string, groupName: string, memberIndex: number) =
         return;
       }
 
-      const fetchedTrack = data.track || selectedTrack;
+      // If we're in BIT track view, ensure the student is recorded as BIT track
+      let fetchedTrack = data.track || selectedTrack;
+      if (selectedTrack === 'BIT' && (!fetchedTrack || fetchedTrack !== 'BIT')) {
+        try {
+          const updateResponse = await fetch('/api/admin/groupManagement', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update-student-track',
+              studentId: normalizedValue,
+              track: 'BIT'
+            }),
+          });
+          
+          if (updateResponse.ok) {
+            fetchedTrack = 'BIT';
+            console.log('Updated student track to BIT');
+          }
+        } catch (err) {
+          console.error('Error updating student track:', err);
+        }
+      }
+
       const updatedStudent = {
         userid: normalizedValue,
         username: data.username,
@@ -1036,12 +1081,19 @@ const showTrackInfo = () => {
 function AdvisorDropdown({ groupName, group }: { groupName: string; group: Group; }) {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [selectedAdvisors, setSelectedAdvisors] = useState<string[]>(group.teacher || []);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  
+  const kkuTeachers = allTeachers.filter(teacher => 
+    teacher.email && teacher.email.endsWith('@kku.ac.th')
+  );
+  
   const handleTeacherSelection = async (teacherId: string) => {
     let newSelection = [...selectedAdvisors];
     if (newSelection.includes(teacherId)) {
       newSelection = newSelection.filter(id => id !== teacherId);
     } else {
-      if (newSelection.length < 2) newSelection.push(teacherId);
+      if (newSelection.length < 100) newSelection.push(teacherId);
       else { alert('อาจารย์ที่ปรึกษาได้สูงสุด 2 ท่าน'); return; }
     }
     setSelectedAdvisors(newSelection);
@@ -1052,57 +1104,82 @@ function AdvisorDropdown({ groupName, group }: { groupName: string; group: Group
       note: group.note || undefined
     });
   };
+  
+  
+  const filteredTeachers = searchTerm
+    ? kkuTeachers.filter(teacher => 
+        `${teacher.username} ${teacher.userlastname}`.toLowerCase().includes(searchTerm.toLowerCase()))
+    : kkuTeachers;
+  
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setIsDropdownVisible(!isDropdownVisible)}
-        className="w-full px-4 py-2 text-base bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
         disabled={selectedTrack === 'ALL'}
       >
-        เลือกอาจารย์ที่ปรึกษา ({selectedAdvisors.length}/2)
+        เลือกอาจารย์ ({selectedAdvisors.length})
       </button>
       {isDropdownVisible && (
         <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-900">เลือกอาจารย์ที่ปรึกษา</h3>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-base font-medium text-gray-900">เลือกอาจารย์ที่ปรึกษา</h3>
               <button onClick={() => setIsDropdownVisible(false)} className="text-gray-400 hover:text-gray-500">
                 <span className="sr-only">ปิด</span>✕
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
-              {allTeachers.map(teacher => (
-                <label key={teacher.userid} className="flex items-center p-3 mb-2 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100">
-                  <input
-                    type="checkbox"
-                    checked={selectedAdvisors.includes(teacher.userid)}
-                    onChange={() => handleTeacherSelection(teacher.userid)}
-                    className="mr-4 w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-base font-medium text-gray-900">
-                      {teacher.username} {teacher.userlastname}
-                    </span>
-                  </div>
-                </label>
-              ))}
+            
+            <div className="p-3 border-b border-gray-200">
+              <input
+                type="text"
+                placeholder="ค้นหาอาจารย์..."
+                className="w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <div className="px-6 py-4 border-t border-gray-200">
-              <button onClick={() => setIsDropdownVisible(false)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            
+            <div className="overflow-y-auto flex-grow px-4 py-2">
+              {filteredTeachers.length === 0 ? (
+                <p className="text-center text-sm text-gray-500 py-2">ไม่พบอาจารย์ที่ตรงกับการค้นหา</p>
+              ) : (
+                filteredTeachers.map(teacher => (
+                  <label key={teacher.userid} className="flex items-center p-2 mb-2 hover:bg-gray-50 rounded cursor-pointer border border-gray-200 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={selectedAdvisors.includes(teacher.userid)}
+                      onChange={() => handleTeacherSelection(teacher.userid)}
+                      className="mr-2 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                    />
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-900">
+                        {teacher.username} {teacher.userlastname}
+                      </span>
+                      <span className="block text-xs text-gray-500">
+                        {teacher.email}
+                      </span>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200">
+              <button onClick={() => setIsDropdownVisible(false)} className="w-full px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
                 เสร็จสิ้น
               </button>
             </div>
           </div>
         </div>
       )}
-      <div className="mt-2 space-y-2">
+      <div className="mt-1 space-y-1">
         {selectedAdvisors.map((teacherId) => {
           const teacher = allTeachers.find(t => t.userid === teacherId);
           return teacher ? (
-            <div key={teacherId} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
-              <span className="text-sm font-medium text-blue-700">{teacher.username} {teacher.userlastname}</span>
-              <button onClick={() => handleTeacherSelection(teacherId)} className="text-blue-400 hover:text-blue-600">✕</button>
+            <div key={teacherId} className="flex items-center justify-between bg-blue-50 px-2 py-1 rounded text-xs">
+              <span className="font-medium text-blue-700">{teacher.username} {teacher.userlastname}</span>
+              <button onClick={() => handleTeacherSelection(teacherId)} className="text-blue-400 hover:text-blue-600 ml-1">✕</button>
             </div>
           ) : null;
         })}
@@ -1184,9 +1261,14 @@ const createEmptyGroupSlots = (track: TrackType) => {
     }
   };
 
+  useEffect(() => {
+   
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <Header openSidebar={() => setIsSidebarOpen(true)} />
+      <title> จัดการกลุ่ม</title>
       <Sidebar isSidebarOpen={isSidebarOpen} closeSidebar={closeSidebar} />
       <div className="pt-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="py-8">
