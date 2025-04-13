@@ -9,7 +9,7 @@ const pool = new Pool({
 
 export async function GET(request: Request) {
   try {
-    // Check authentication
+  
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     const client = await pool.connect();
     try {
-      // Query for assignments with file issues (corrupted or missing signatures)
+      
       const query = `
         SELECT 
           as_sent.assignment_sent_id as id, 

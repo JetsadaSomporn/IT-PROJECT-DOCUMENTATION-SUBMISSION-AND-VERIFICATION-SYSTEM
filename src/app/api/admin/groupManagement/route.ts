@@ -317,8 +317,7 @@ export async function PATCH(request: Request) {
       }
       
       await client.query('BEGIN');
-      
-      // Update the track field in the User table
+     
       const updateQuery = `
         UPDATE "User"
         SET track = $1, updated = CURRENT_TIMESTAMP
@@ -342,7 +341,7 @@ export async function PATCH(request: Request) {
       });
     }
     
-    // Handle the existing group transfer functionality
+  
     const { sourceSubjectId, targetSubjectId } = requestData;
   
     if (!sourceSubjectId || !targetSubjectId) {

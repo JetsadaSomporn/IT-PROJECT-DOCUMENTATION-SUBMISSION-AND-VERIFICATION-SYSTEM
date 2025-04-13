@@ -55,13 +55,13 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         [parsedSubjectId]
       );
 
-      // Process the results to include the full timestamp from validates
+     
       const assignments = res.rows.map(assignment => {
-        // Check if validates contains the full due date time
+       
         if (assignment.validates && assignment.validates.length > 0) {
           const validate = assignment.validates[0];
           if (validate.fullDueDateTime) {
-            // Use the full timestamp from validates
+            
             assignment.assignment_due_date_with_time = validate.fullDueDateTime;
           }
         }
@@ -94,7 +94,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
     
         const assignment = assignmentResult.rows[0];
         
-        // First, get valid groups for this subject
+       
         const groupsQuery = `
           SELECT g.groupid, g.groupname, g."User", g.projectname
           FROM "Group" g
@@ -102,10 +102,10 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         `;
         const groupsResult = await client.query(groupsQuery, [parsedSubjectId]);
         
-        // Get total count of valid groups
+       
         const totalValidGroups = groupsResult.rows.length;
         
-        // Get list of group IDs that have submitted
+     
         const submittedGroupsQuery = `
           SELECT DISTINCT group_id
           FROM "Assignment_Sent"
@@ -114,7 +114,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         const submittedGroupsResult = await client.query(submittedGroupsQuery, [assignmentId]);
         const submittedGroupIds = submittedGroupsResult.rows.map(row => row.group_id);
         
-        // Get all submitted groups with details
+      
         const submittedGroupsDetailsQuery = `
           SELECT g.groupid, g.groupname, g.projectname
           FROM "Group" g
@@ -126,12 +126,11 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         );
         
         const submittedGroupsDetails = submittedGroupsDetailsResult.rows;
-        
-        // Count submitted groups and calculate not submitted
+       
         const submittedCount = submittedGroupIds.length;
         const notSubmittedCount = Math.max(0, totalValidGroups - submittedCount);
         
-        // Process the due date for comparing submission times
+       
         let dueDate;
         if (assignment.validates && 
             Array.isArray(assignment.validates) && 
@@ -142,7 +141,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           dueDate = new Date(assignment.assignment_due_date);
         }
     
-        // Get submission details for all submitted assignments with expanded details
+       
         const submissionsQuery = `
           SELECT 
             ass.*,
@@ -173,7 +172,6 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         const submissionsResult = await client.query(submissionsQuery, [assignmentId]);
         const submissions = submissionsResult?.rowCount && submissionsResult.rowCount > 0 ? submissionsResult.rows : [];
     
-        // Get not submitted groups details
         const notSubmittedGroups = groupsResult.rows
           .filter(group => !submittedGroupIds.includes(group.groupid))
           .map(group => ({
@@ -182,7 +180,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
             projectname: group.projectname
           }));
     
-        // Calculate statistics by group instead of by individual submission
+       
         const stats = {
           timeliness: {
             onTime: 0,
@@ -215,10 +213,10 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           }
         };
     
-        // Track the earliest submission for each group
+       
         const groupSubmissionMap: { [groupId: string]: { date: Date, isOnTime: boolean } } = {};
         
-        // Process each submission to track by group and collect additional stats
+        
         let fileCorruptedCount = 0;
         let fileMissingSignatureCount = 0;
         
@@ -227,7 +225,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           const submitDate = new Date(sub.created);
           const isOnTime = submitDate <= dueDate;
           
-          // Track file sizes for all submissions
+         
           const fileSize = parseFloat(sub.file_size);
           if (!isNaN(fileSize) && fileSize > 0) {
             stats.fileSizes.push({
@@ -236,26 +234,25 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
             });
           }
     
-          // Track file types
+          
           if (sub.file_name) {
             const fileExt = sub.file_name.split('.').pop()?.toLowerCase() || 'unknown';
             stats.fileTypes[fileExt] = (stats.fileTypes[fileExt] || 0) + 1;
           }
     
-          // Track hourly submission distribution
+         
           stats.hourlyDistribution[submitDate.getHours()]++;
           
-          // Track day of week submission distribution (0 = Sunday, 6 = Saturday)
+       
           stats.dayOfWeekDistribution[submitDate.getDay()]++;
     
-          // Calculate submission gap (hours between assignment due and submission)
+         
           const creationDate = new Date(assignment.created);
           const gapHours = Math.round((submitDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60));
           if (gapHours >= 0) {
             stats.submissionTimeGap.push(gapHours);
           }
     
-          // For timeline tracking, add each submission to its date bucket
           const dateKey = submitDate.toISOString().split('T')[0];
           const dateIndex = stats.timeline.dates.indexOf(dateKey);
           if (dateIndex === -1) {
@@ -276,7 +273,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
             }
           }
     
-          // Process verification results if available
+         
           if (sub.verification_results) {
             try {
               const results = typeof sub.verification_results === 'string' 
@@ -301,16 +298,16 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
                 }
               }
             } catch (e) {
-              // Silent error
+            
             }
           }
     
-          // Track the earliest submission for each group
+        
           if (!groupSubmissionMap[groupId] || submitDate < groupSubmissionMap[groupId].date) {
             groupSubmissionMap[groupId] = { date: submitDate, isOnTime };
           }
 
-          // Count file quality issues
+        
           if (sub.file_validations) {
             try {
               const validations = typeof sub.file_validations === 'string'
@@ -331,7 +328,6 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           }
         });
     
-        // Now count timeliness based on the earliest submission for each group
         Object.values(groupSubmissionMap).forEach(submission => {
           if (submission.isOnTime) {
             stats.timeliness.onTime++;
@@ -340,23 +336,22 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
           }
         });
     
-        // Calculate average submission time gap
+   
         stats.averageSubmissionHours = stats.submissionTimeGap.length > 0
           ? stats.submissionTimeGap.reduce((sum, gap) => sum + gap, 0) / stats.submissionTimeGap.length
           : 0;
     
-        // Adjust timeliness counts if needed
+      
         if (stats.timeliness.onTime + stats.timeliness.late !== submittedCount) {
           if (stats.timeliness.onTime + stats.timeliness.late > submittedCount) {
-            // Too many counted - prioritize preserving on-time count
+           
             stats.timeliness.late = Math.max(0, submittedCount - stats.timeliness.onTime);
           }
         }
     
-        // Sort file sizes by size (descending)
+       
         stats.fileSizes.sort((a, b) => b.size - a.size);
     
-        // Sort timeline dates
         const sortedIndices = stats.timeline.dates
           .map((date, index) => ({ date, index }))
           .sort((a, b) => a.date.localeCompare(b.date))
@@ -366,7 +361,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
         stats.timeline.onTime = sortedIndices.map(i => stats.timeline.onTime[i]);
         stats.timeline.late = sortedIndices.map(i => stats.timeline.late[i]);
 
-        // Update the stats with the file quality information
+        
         stats.fileQuality = {
           corrupted: fileCorruptedCount,
           missingSignature: fileMissingSignatureCount,
@@ -496,7 +491,7 @@ export async function GET(request: Request, { params }: { params: { subjectid: s
     }
 
   } catch (err) {
-    // Return empty array on error for assignments
+  
     const errorUrl = new URL(request.url);
     if (errorUrl.searchParams.get('action') === 'all-assignments') {
       return NextResponse.json([], { 
@@ -546,7 +541,6 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           [teachers]
         );
     
-        // Update Subject_Available with teacher IDs as JSONB array
         const updateQuery = `
           UPDATE "Subject_Available"
           SET 
@@ -707,7 +701,7 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
       }
     }
 
-    // แก้ไขฟังก์ชันในส่วนที่บันทึกเวลาลงฐานข้อมูล
+  
     if (action === 'update-assignment') {
       const client = await pool.connect();
       try {
@@ -722,7 +716,6 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           validates 
         } = requestBody;
   
-        // Store the full timestamp in the validates array with proper error handling
         let validateItem;
         if (validates && Array.isArray(validates) && validates.length > 0) {
           validateItem = {
@@ -737,7 +730,6 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
           };
         }
         
-        // Set timezone to correctly handle timestamps
         await client.query("SET timezone = 'Asia/Bangkok'");
         
         const updateQuery = `
@@ -775,7 +767,7 @@ export async function PUT(request: Request, { params }: { params: { subjectid: s
   
         await client.query('COMMIT');
   
-        // Return the assignment with the proper fullDueDateTime
+      
         const updatedAssignment = {
           ...result.rows[0],
           doc_verification: result.rows[0].validates?.[0]?.requirements || {}
@@ -1131,7 +1123,6 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
         });
       }
 
-      // อัปเดต action create-assignment เช่นกัน
       if (action === 'create-assignment') {
         try {
           const {
@@ -1150,7 +1141,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
           try {
             await client.query('BEGIN');
         
-            // Parse the full date string to preserve time components
+           
             const dueDate = new Date(assignment_due_date);
         
             const validateItem = {
@@ -1159,7 +1150,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               fullDueDateTime: assignment_due_date // Store the full timestamp with timezone
             };
         
-            // Set the PostgreSQL session timezone to Thailand for consistent handling
+      
             await client.query("SET timezone = 'Asia/Bangkok'");
             
             const insertQuery = `
@@ -1312,19 +1303,19 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
           try {
             await client.query('BEGIN');
       
-            // convert doc_verifi to validate format
+            
             const validateItem = {
               type: 'verification_requirements',
               requirements: doc_verification
             };
       
-            // Ensure we're working with a proper ISO format date string
+            
             const dueDate = new Date(assignment_due_date);
 
-            // First, set the PostgreSQL session timezone to UTC to avoid automatic conversions
+         
             await client.query("SET timezone = 'UTC'");
             
-            // Instead of using AT TIME ZONE, use timestamp literal with time zone
+          
             const updateQuery = `
               UPDATE "Assignment"
               SET 
@@ -1498,7 +1489,7 @@ export async function POST(request: Request, { params }: { params: { subjectid: 
               );
               
               if (updateResult.rowCount === 0) {
-                // Roll back transaction but don't delete the file yet - it's already saved
+               
                 await client.query('ROLLBACK');
                 throw new Error('ไม่สามารถอัปเดตข้อมูลการส่งงานได้');
               }

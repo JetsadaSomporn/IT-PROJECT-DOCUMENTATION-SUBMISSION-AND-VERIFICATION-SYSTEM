@@ -9,27 +9,8 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Helper function to write logs
-const writeToLog = async (data: any) => {
-  const logDir = path.join(process.cwd(), 'logs');
-  if (!fs.existsSync(logDir)){
-    fs.mkdirSync(logDir);
-  }
-  const logPath = path.join(logDir, 'database_state.txt');
-  
-  // Convert data to formatted text
-  const text = Object.entries(data.data).map(([tableName, rows]) => {
-    return `=== ${tableName} ===\n\n${
-      Array.isArray(rows) 
-        ? rows.map(row => JSON.stringify(row, null, 2)).join('\n\n')
-        : 'No data'
-    }\n\n`;
-  }).join('\n');
 
-  const header = `Database State as of ${data.timestamp}\n\n`;
-  
-  await fs.promises.writeFile(logPath, header + text);
-};
+
 
 export async function GET(request: Request) {
   console.log('GET request received');
@@ -48,7 +29,7 @@ export async function GET(request: Request) {
 
     const client = await pool.connect();
     try {
-      // Combined database state object
+      
       const databaseState = {
         timestamp: new Date().toISOString(),
         data: {} as { [key: string]: any[] }
@@ -73,10 +54,9 @@ export async function GET(request: Request) {
         databaseState.data[table] = result.rows;
       }
 
-      // Write as text file
-      await writeToLog(databaseState);
+     
 
-      // Return Subject_Available data for the frontend
+
       return NextResponse.json(databaseState.data['Subject_Available']);
 
     } finally {
@@ -91,7 +71,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Handle requests to add a new subject
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -107,7 +86,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { subject_name, section, subject_semester, subject_year, teachers, group_data } = body;
 
-  // check ddata for new subj
+  // check data for new subj
     if (!subject_name?.trim()) {
       return NextResponse.json({ error: 'Subject name is required' }, { status: 400 });
     }
@@ -155,15 +134,3 @@ export async function POST(request: Request) {
   }
 }
 
-interface NewSubjectData {
-  subject_name: string;
-  section: number;
-  subject_semester: number;
-  subject_year: string;
-  teachers: number[];
-  group_data: {
-    BIT: number;
-    Network: number;
-    Web: number;
-  };
-}

@@ -38,7 +38,7 @@ const pool = new Pool({
 
 // Main NextAuth configuration
 export const authOptions: NextAuthOptions = {
-  // Configure authentication providers
+ 
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -57,7 +57,7 @@ export const authOptions: NextAuthOptions = {
         
         const client = await pool.connect();
         try {
-          // Get user from database
+          
           const res = await client.query('SELECT * FROM "User" WHERE email = $1', [email]);
           console.log('Database response:', res.rows[0]);
           
