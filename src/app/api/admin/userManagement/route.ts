@@ -123,10 +123,17 @@ export async function PUT(request: Request) {
     }
 
     const { userId, newType } = await request.json();
+    // Validate newType if necessary
+    const validTypes = ['student', 'teacher', 'admin'];
+    if (!validTypes.includes(newType)) {
+        return NextResponse.json({ error: 'Invalid user type provided' }, { status: 400 });
+    }
+
     const client = await pool.connect();
     try {
+    
       const updateQuery = `UPDATE "User" SET type = $1 WHERE userid = $2`;
-      await client.query(updateQuery, [[newType], userId]); 
+      await client.query(updateQuery, [[newType], userId]); // Ensure type is stored as an array e.g., ['admin']
       return NextResponse.json({ success: true });
     } finally {
       client.release();

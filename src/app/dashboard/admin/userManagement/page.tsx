@@ -9,7 +9,8 @@ import {
   faFilter, 
   faSearch, 
   faUser,
-  faBell
+  faBell,
+  faEllipsisV
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -135,6 +136,7 @@ const UserManagement: React.FC = () => {
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   function handleTypeChange(id: string, field: 'name' | 'lastName', value: string): void {
     setUsers(prevUsers =>
@@ -143,6 +145,34 @@ const UserManagement: React.FC = () => {
       )
     );
   }
+
+  const handleUserTypeChange = async (userId: string, newType: 'student' | 'teacher' | 'admin') => {
+    try {
+      const response = await fetch('/api/admin/userManagement', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, newType }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user type');
+      }
+
+      setUsers(prevUsers =>
+        prevUsers.map(user =>
+          user.id === userId ? { ...user, userType: [newType] } : user
+        )
+      );
+      setActiveDropdown(null);
+      alert(`User type updated successfully to ${newType}`);
+    } catch (error: any) {
+      console.error('Error updating user type:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -162,7 +192,6 @@ const UserManagement: React.FC = () => {
         
         const data = await res.json();
         
-        // Always check if it's an array before processing
         if (Array.isArray(data)) {
           console.log("Loaded users sample:", data.slice(0, 2));
           setUsers(data);
@@ -216,7 +245,6 @@ const UserManagement: React.FC = () => {
     const matchesStatus = filters.status === 'all' || user.status === filters.status;
     const matchesUserType = userTypeFilter === 'all' || user.userType.includes(userTypeFilter);
     
-    // FIX HERE: Simplified subject matching logic that directly compares with subject name
     let matchesSubject = true;
     if (selectedSubject && selectedSubject.trim() !== '') {
       matchesSubject = false;
@@ -270,7 +298,7 @@ const UserManagement: React.FC = () => {
   );
 
   const TableRow: React.FC<{ user: User }> = ({ user }) => (
-    <tr key={user.id} className="hover:bg-gray-50">
+    <tr key={user.id} className="hover:bg-gray-50 relative">
       <td className="px-6 py-4 whitespace-nowrap">{user.id}</td>
       <td className="px-6 py-4 whitespace-nowrap">
         {editingUser === user.id ? (
@@ -293,7 +321,7 @@ const UserManagement: React.FC = () => {
         ) : (
           <div className="flex items-center">
             <div className="text-sm font-medium text-gray-900">
-              {user.name} {user.lastName}
+              {user.name} {user.lastName} ({user.userType?.join(', ') || 'N/A'})
             </div>
           </div>
         )}
@@ -302,12 +330,13 @@ const UserManagement: React.FC = () => {
         <div className="text-sm text-gray-900">{user.email}</div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-2 justify-center items-center">
           <button
             onClick={() => setEditingUser(editingUser === user.id ? null : user.id)}
             className="text-blue-600 hover:text-blue-900 transition-colors duration-200 px-2 py-1 rounded hover:bg-blue-50"
+            title={editingUser === user.id ? 'Save Name' : 'Edit Name'}
           >
-            {editingUser === user.id ? 'บันทึก' : 'แก้ไข'}
+            {editingUser === user.id ? 'บันทึกชื่อ' : 'แก้ไขชื่อ'}
           </button>
           <button
             onClick={() => {
@@ -315,9 +344,41 @@ const UserManagement: React.FC = () => {
               setIsDeleteModalOpen(true);
             }}
             className="text-red-600 hover:text-red-900 transition-colors duration-200 px-2 py-1 rounded hover:bg-red-50"
+            title="Delete User"
           >
             ลบ
           </button>
+          <div className="relative inline-block text-left">
+            <button
+              onClick={() => setActiveDropdown(activeDropdown === user.id ? null : user.id)}
+              className="text-gray-500 hover:text-gray-700 transition-colors duration-200 px-2 py-1 rounded hover:bg-gray-100"
+              title="Change User Type"
+            >
+              <FontAwesomeIcon icon={faEllipsisV} />
+            </button>
+            {activeDropdown === user.id && (
+              <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                  <span className="block px-4 py-2 text-xs text-gray-500 uppercase">Change Role To:</span>
+                  {['student', 'teacher', 'admin'].map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleUserTypeChange(user.id, type as 'student' | 'teacher' | 'admin')}
+                      className={`block w-full text-left px-4 py-2 text-sm ${
+                        user.userType?.includes(type)
+                          ? 'font-semibold text-blue-600 bg-blue-50'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                      role="menuitem"
+                      disabled={user.userType?.includes(type)}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </td>
     </tr>
@@ -456,9 +517,7 @@ const UserManagement: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Search and Filter Group - Exact clone from userView */}
                 <div className="flex items-center gap-2 ml-auto order-1 sm:order-2">
-                  {/* Search */}
                   <div className="relative">
                     <input
                       type="text"
@@ -473,7 +532,6 @@ const UserManagement: React.FC = () => {
                     />
                   </div>
                   
-                  {/* Filter Button */}
                   <div className="relative">
                     <button 
                       onClick={() => setFilterOpen(!filterOpen)} 
@@ -486,7 +544,6 @@ const UserManagement: React.FC = () => {
                       ตัวกรอง {activeFiltersCount > 0 && `(${activeFiltersCount})`}
                     </button>
                     
-                    {/* Filter Dropdown */}
                     <AnimatePresence>
                       {filterOpen && (
                         <motion.div 

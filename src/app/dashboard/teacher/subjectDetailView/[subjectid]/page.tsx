@@ -2035,7 +2035,7 @@ useEffect(() => {
             >
               ปิด
             </button>
-            {/* Remove save button for details tab */}
+     
           </div>
         </div>
       </div>

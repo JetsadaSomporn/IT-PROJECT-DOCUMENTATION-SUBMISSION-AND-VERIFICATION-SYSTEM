@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const RegisterPage = () => {
-  const [userid, setUserId] = useState('');
   const [username, setUsername] = useState('');
   const [lastname, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -20,7 +19,7 @@ const RegisterPage = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userid, username, lastname, email, password }),
+        body: JSON.stringify({ username, lastname, email, password }),
       });
 
       const data = await response.json();
@@ -44,17 +43,6 @@ const RegisterPage = () => {
             {errorMessage}
           </div>
         )}
-        <div className="mb-4">
-          <label className="block mb-1">User ID:</label>
-          <input
-            type="text"
-            value={userid}
-            onChange={(e) => setUserId(e.target.value)}
-            required
-            maxLength={10}
-            className="w-full border border-gray-300 p-2 rounded"
-          />
-        </div>
         <div className="mb-4">
           <label className="block mb-1">Username:</label>
           <input
